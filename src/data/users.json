@@ -1,0 +1,46 @@
+[
+  {
+    "id": "admin-1",
+    "name": "Sarah Chen",
+    "email": "admin@demo.app",
+    "password": "Admin@123",
+    "role": "admin",
+    "avatar": "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face",
+    "department": "Administration",
+    "createdAt": "2024-01-15T10:00:00Z"
+  },
+  {
+    "id": "tutor-1",
+    "name": "Dr. Michael Rodriguez",
+    "email": "tutor@demo.app",
+    "password": "Tutor@123",
+    "role": "tutor",
+    "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
+    "department": "Computer Science",
+    "specialization": ["Web Development", "Data Structures", "Algorithms"],
+    "createdAt": "2024-01-20T14:30:00Z"
+  },
+  {
+    "id": "student-1",
+    "name": "Emma Thompson",
+    "email": "student@demo.app",
+    "password": "Student@123",
+    "role": "student",
+    "avatar": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face",
+    "grade": "12",
+    "enrollmentId": "ST2024001",
+    "parentId": "parent-1",
+    "createdAt": "2024-02-01T09:15:00Z"
+  },
+  {
+    "id": "parent-1",
+    "name": "Robert Thompson",
+    "email": "parent@demo.app",
+    "password": "Parent@123",
+    "role": "parent",
+    "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+    "children": ["student-1"],
+    "relationship": "Father",
+    "createdAt": "2024-02-01T09:00:00Z"
+  }
+]

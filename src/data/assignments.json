@@ -1,0 +1,73 @@
+[
+  {
+    "id": "assign-1",
+    "title": "React Component Architecture",
+    "description": "Build a complex React application demonstrating component composition, state management, and performance optimization techniques.",
+    "instructions": "Create a task management application with the following features:\n- User authentication\n- CRUD operations for tasks\n- Drag and drop functionality\n- Real-time updates\n- Responsive design\n\nSubmit your code via GitHub repository with detailed README.",
+    "classId": "class-1",
+    "className": "Advanced Web Development",
+    "tutorId": "tutor-1",
+    "tutorName": "Dr. Michael Rodriguez",
+    "dueDate": "2024-03-15T23:59:00Z",
+    "maxPoints": 100,
+    "submissionType": "file",
+    "allowedFileTypes": [".zip", ".tar.gz"],
+    "status": "published",
+    "createdAt": "2024-02-20T14:00:00Z",
+    "submissions": [
+      {
+        "studentId": "student-1",
+        "studentName": "Emma Thompson",
+        "submittedAt": "2024-03-14T18:30:00Z",
+        "fileUrl": "assignments/assign-1/student-1/project.zip",
+        "status": "submitted",
+        "grade": null,
+        "feedback": null
+      }
+    ]
+  },
+  {
+    "id": "assign-2",
+    "title": "Binary Search Tree Implementation",
+    "description": "Implement a complete Binary Search Tree with all standard operations and analyze time complexities.",
+    "instructions": "Implement a BST class with the following methods:\n- insert(value)\n- delete(value)\n- search(value)\n- inorderTraversal()\n- preorderTraversal()\n- postorderTraversal()\n- getHeight()\n- getSize()\n\nInclude comprehensive unit tests and complexity analysis.",
+    "classId": "class-2",
+    "className": "Data Structures & Algorithms",
+    "tutorId": "tutor-1",
+    "tutorName": "Dr. Michael Rodriguez",
+    "dueDate": "2024-03-20T23:59:00Z",
+    "maxPoints": 80,
+    "submissionType": "file",
+    "allowedFileTypes": [".py", ".java", ".cpp", ".js"],
+    "status": "published",
+    "createdAt": "2024-02-25T10:00:00Z",
+    "submissions": [
+      {
+        "studentId": "student-1",
+        "studentName": "Emma Thompson",
+        "submittedAt": null,
+        "fileUrl": null,
+        "status": "pending",
+        "grade": null,
+        "feedback": null
+      }
+    ]
+  },
+  {
+    "id": "assign-3",
+    "title": "SEO Audit & Strategy Report",
+    "description": "Conduct a comprehensive SEO audit of a website and create an optimization strategy.",
+    "instructions": "Choose a small business website and perform:\n1. Technical SEO audit\n2. Content analysis\n3. Keyword research\n4. Competitor analysis\n5. Create actionable recommendations\n\nSubmit a professional report (PDF) with screenshots and data.",
+    "classId": "class-3",
+    "className": "Digital Marketing Fundamentals",
+    "tutorId": "tutor-2",
+    "tutorName": "Jessica Park",
+    "dueDate": "2024-04-10T23:59:00Z",
+    "maxPoints": 90,
+    "submissionType": "file",
+    "allowedFileTypes": [".pdf", ".docx"],
+    "status": "draft",
+    "createdAt": "2024-03-01T09:00:00Z",
+    "submissions": []
+  }
+]

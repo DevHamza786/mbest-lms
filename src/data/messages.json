@@ -1,0 +1,72 @@
+[
+  {
+    "id": "msg-1",
+    "threadId": "thread-1",
+    "senderId": "tutor-1",
+    "senderName": "Dr. Michael Rodriguez",
+    "senderRole": "tutor",
+    "recipientId": "student-1",
+    "recipientName": "Emma Thompson",
+    "recipientRole": "student",
+    "subject": "Assignment Feedback - React Component Architecture",
+    "body": "Hi Emma,\n\nI've reviewed your React assignment submission and I'm impressed with your implementation! Your component architecture is well-structured and you've demonstrated a solid understanding of React patterns.\n\nA few areas for improvement:\n1. Consider implementing error boundaries for better error handling\n2. Add more comprehensive unit tests for edge cases\n3. The state management could be optimized with useCallback hooks\n\nOverall, excellent work! Your grade is 92/100.\n\nBest regards,\nDr. Rodriguez",
+    "timestamp": "2024-03-16T10:30:00Z",
+    "read": false,
+    "important": true,
+    "attachments": []
+  },
+  {
+    "id": "msg-2",
+    "threadId": "thread-1",
+    "senderId": "student-1",
+    "senderName": "Emma Thompson",
+    "senderRole": "student",
+    "recipientId": "tutor-1",
+    "recipientName": "Dr. Michael Rodriguez",
+    "recipientRole": "tutor",
+    "subject": "Re: Assignment Feedback - React Component Architecture",
+    "body": "Thank you so much for the detailed feedback, Professor! I really appreciate the specific areas you highlighted for improvement.\n\nI have a quick question about error boundaries - would you recommend implementing them at the component level or having a global error boundary? Also, could you point me to some resources for advanced React testing patterns?\n\nThanks again for your time and guidance!\n\nBest,\nEmma",
+    "timestamp": "2024-03-16T14:20:00Z",
+    "read": true,
+    "important": false,
+    "attachments": []
+  },
+  {
+    "id": "msg-3",
+    "threadId": "thread-2",
+    "senderId": "admin-1",
+    "senderName": "Sarah Chen",
+    "senderRole": "admin",
+    "recipientId": "tutor-1",
+    "recipientName": "Dr. Michael Rodriguez",
+    "recipientRole": "tutor",
+    "subject": "Class Schedule Update - Room Change",
+    "body": "Dear Dr. Rodriguez,\n\nI hope this message finds you well. We need to make a room change for your Advanced Web Development class (CS301) starting next week.\n\nNew Details:\n- Room: Lab 301 (instead of Lab 204)\n- Same time slot: Monday, Wednesday, Friday 10:00 AM - 11:30 AM\n- Effective from March 18th, 2024\n\nThe new lab has better equipment and more space for your students. Please inform your class about this change.\n\nIf you have any questions or concerns, please don't hesitate to reach out.\n\nBest regards,\nSarah Chen\nAdministrative Director",
+    "timestamp": "2024-03-15T09:00:00Z",
+    "read": true,
+    "important": true,
+    "attachments": [
+      {
+        "name": "room-layout-lab-301.pdf",
+        "size": "2.4 MB",
+        "type": "pdf"
+      }
+    ]
+  },
+  {
+    "id": "msg-4",
+    "threadId": "thread-3",
+    "senderId": "parent-1",
+    "senderName": "Robert Thompson",
+    "senderRole": "parent",
+    "recipientId": "tutor-1",
+    "recipientName": "Dr. Michael Rodriguez",
+    "recipientRole": "tutor",
+    "subject": "Emma's Progress Inquiry",
+    "body": "Dear Professor Rodriguez,\n\nI hope you're doing well. I'm writing to inquire about my daughter Emma Thompson's progress in your Advanced Web Development course.\n\nEmma has been very enthusiastic about the class and often talks about the projects she's working on. However, I wanted to get your perspective on how she's doing academically and if there are any areas where she might need additional support.\n\nI'd also like to know if there are any upcoming major assignments or projects that she should be preparing for.\n\nThank you for your time and for being such an inspiring teacher for Emma.\n\nBest regards,\nRobert Thompson\nEmma's father",
+    "timestamp": "2024-03-14T16:45:00Z",
+    "read": false,
+    "important": false,
+    "attachments": []
+  }
+]

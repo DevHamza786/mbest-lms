@@ -1,0 +1,71 @@
+[
+  {
+    "id": "class-1",
+    "name": "Advanced Web Development",
+    "code": "CS301",
+    "tutorId": "tutor-1",
+    "tutorName": "Dr. Michael Rodriguez",
+    "description": "Master modern web development with React, TypeScript, and advanced patterns",
+    "students": ["student-1"],
+    "schedule": {
+      "days": ["Monday", "Wednesday", "Friday"],
+      "time": "10:00 AM - 11:30 AM",
+      "room": "Lab 204"
+    },
+    "duration": "16 weeks",
+    "capacity": 25,
+    "enrolled": 18,
+    "status": "active",
+    "startDate": "2024-02-05T00:00:00Z",
+    "endDate": "2024-06-01T00:00:00Z",
+    "category": "Computer Science",
+    "level": "Advanced",
+    "credits": 4
+  },
+  {
+    "id": "class-2",
+    "name": "Data Structures & Algorithms",
+    "code": "CS201",
+    "tutorId": "tutor-1",
+    "tutorName": "Dr. Michael Rodriguez",
+    "description": "Fundamental data structures and algorithmic problem-solving techniques",
+    "students": ["student-1"],
+    "schedule": {
+      "days": ["Tuesday", "Thursday"],
+      "time": "2:00 PM - 3:30 PM",
+      "room": "Room 305"
+    },
+    "duration": "16 weeks",
+    "capacity": 30,
+    "enrolled": 24,
+    "status": "active",
+    "startDate": "2024-02-05T00:00:00Z",
+    "endDate": "2024-06-01T00:00:00Z",
+    "category": "Computer Science",
+    "level": "Intermediate",
+    "credits": 3
+  },
+  {
+    "id": "class-3",
+    "name": "Digital Marketing Fundamentals",
+    "code": "MKT101",
+    "tutorId": "tutor-2",
+    "tutorName": "Jessica Park",
+    "description": "Learn the essentials of digital marketing, SEO, and social media strategy",
+    "students": [],
+    "schedule": {
+      "days": ["Monday", "Wednesday"],
+      "time": "3:00 PM - 4:30 PM",
+      "room": "Room 201"
+    },
+    "duration": "12 weeks",
+    "capacity": 20,
+    "enrolled": 15,
+    "status": "active",
+    "startDate": "2024-02-12T00:00:00Z",
+    "endDate": "2024-05-15T00:00:00Z",
+    "category": "Business",
+    "level": "Beginner",
+    "credits": 3
+  }
+]

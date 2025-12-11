@@ -1,0 +1,12 @@
+export { default as TutorDashboard } from './TutorDashboard';
+export { default as TutorProfile } from './TutorProfile';
+export { default as TutorClasses } from './TutorClasses';
+export { default as TutorStudents } from './TutorStudents';
+export { default as TutorAssignments } from './TutorAssignments';
+export { default as TutorAttendance } from './TutorAttendance';
+export { default as TutorResources } from './TutorResources';
+export { default as TutorMessaging } from './TutorMessaging';
+export { default as TutorCalendar } from './TutorCalendar';
+export { default as TutorHours } from './TutorHours';
+export { default as TutorAvailability } from './TutorAvailability';
+export { default as TutorLessonRequests } from './TutorLessonRequests';
