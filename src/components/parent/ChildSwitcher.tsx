@@ -20,10 +20,24 @@ import { useParentContext } from '@/lib/store/parentStore';
 
 export function ChildSwitcher() {
   const [open, setOpen] = useState(false);
-  const { children, activeChild, setActiveChild } = useParentContext();
+  const { children, activeChild, setActiveChild, isLoading } = useParentContext();
+
+  if (isLoading) {
+    return (
+      <Button variant="outline" disabled className="w-[200px]">
+        <User className="h-4 w-4 mr-2" />
+        Loading...
+      </Button>
+    );
+  }
 
   if (!children.length) {
-    return null;
+    return (
+      <Button variant="outline" disabled className="w-[200px]">
+        <User className="h-4 w-4 mr-2" />
+        No children available
+      </Button>
+    );
   }
 
   return (

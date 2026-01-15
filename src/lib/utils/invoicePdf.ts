@@ -143,11 +143,50 @@ export function generateStudentInvoicePDF(invoice: Invoice): void {
   doc.save(`invoice-${invoice.id}.pdf`);
 }
 
-export function generateTutorInvoicePDF(invoice: TutorInvoice): void {
+export async function generateTutorInvoicePDF(invoice: TutorInvoice & { 
+  due_date?: string;
+  currency?: string;
+  paid_date?: string;
+  payment_method?: string;
+  transaction_id?: string;
+}): Promise<void> {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
   let yPos = margin;
+
+  // Add Logo (if available)
+  try {
+    const logoWidth = 50;
+    const logoHeight = 20;
+    
+    // Load logo image
+    const logoImg = new Image();
+    logoImg.crossOrigin = 'anonymous';
+    
+    await new Promise<void>((resolve, reject) => {
+      logoImg.onload = () => {
+        try {
+          doc.addImage(logoImg, 'PNG', margin, yPos, logoWidth, logoHeight);
+          yPos += logoHeight + 10;
+          resolve();
+        } catch (e) {
+          console.log('Failed to add logo to PDF:', e);
+          yPos += 5;
+          resolve(); // Continue without logo
+        }
+      };
+      logoImg.onerror = () => {
+        console.log('Logo image not found, continuing without logo');
+        yPos += 5;
+        resolve(); // Continue without logo
+      };
+      logoImg.src = '/M.B.E.S.T-logo.png';
+    });
+  } catch (e) {
+    // Logo loading failed, continue without it
+    console.log('Logo not available, continuing without logo');
+  }
 
   // Header
   doc.setFontSize(24);
@@ -164,8 +203,17 @@ export function generateTutorInvoicePDF(invoice: TutorInvoice): void {
   doc.setFontSize(10);
   doc.text(`Date: ${new Date(invoice.date).toLocaleDateString()}`, margin, yPos);
   yPos += 6;
+  if (invoice.due_date) {
+    doc.text(`Due Date: ${new Date(invoice.due_date).toLocaleDateString()}`, margin, yPos);
+    yPos += 6;
+  }
   doc.text(`Period: ${new Date(invoice.periodStart).toLocaleDateString()} - ${new Date(invoice.periodEnd).toLocaleDateString()}`, margin, yPos);
-  yPos += 10;
+  yPos += 6;
+  if (invoice.currency) {
+    doc.text(`Currency: ${invoice.currency}`, margin, yPos);
+    yPos += 6;
+  }
+  yPos += 4;
 
   // Tutor Info
   if (invoice.tutorName || invoice.tutorAddress) {
@@ -250,7 +298,23 @@ export function generateTutorInvoicePDF(invoice: TutorInvoice): void {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text(`Status: ${invoice.status}`, margin, yPos);
-  yPos += 10;
+  yPos += 6;
+  
+  // Payment Information
+  if (invoice.paid_date) {
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Paid Date: ${new Date(invoice.paid_date).toLocaleDateString()}`, margin, yPos);
+    yPos += 6;
+  }
+  if (invoice.payment_method) {
+    doc.text(`Payment Method: ${invoice.payment_method}`, margin, yPos);
+    yPos += 6;
+  }
+  if (invoice.transaction_id) {
+    doc.text(`Transaction ID: ${invoice.transaction_id}`, margin, yPos);
+    yPos += 6;
+  }
+  yPos += 4;
 
   // Notes
   if (invoice.notes) {

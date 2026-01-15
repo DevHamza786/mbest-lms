@@ -18,11 +18,14 @@ import {
   Calendar,
   User,
   Eye,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
+import { apiClient } from '@/lib/api/client';
 
 interface Resource {
   id: string;
+  resourceId?: number;
   title: string;
   description: string;
   type: string;
@@ -33,8 +36,10 @@ interface Resource {
   downloads: number;
   fileSize?: string;
   url: string;
+  file_path?: string;
   tags: string[];
   rating: number;
+  _apiResource?: any;
 }
 
 interface ResourcePreviewModalProps {
@@ -55,6 +60,8 @@ export function ResourcePreviewModal({
   isFavorite = false
 }: ResourcePreviewModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   if (!resource) return null;
 
@@ -88,19 +95,79 @@ export function ResourcePreviewModal({
   };
 
   const handlePreview = async () => {
+    // Toggle preview if already shown
+    if (showPreview) {
+      setShowPreview(false);
+      setPreviewUrl(null);
+      return;
+    }
+
     setIsLoading(true);
     
-    // Simulate loading time for preview
-    setTimeout(() => {
+    try {
       if (resource.type === 'link') {
-        window.open(resource.url, '_blank', 'noopener,noreferrer');
-      } else {
-        // For other types, we would typically show an embedded viewer
-        // For now, we'll just show a message
-        console.log(`Opening preview for ${resource.title}`);
+        // For links, open directly in a new tab
+        if (resource.url && resource.url !== '#') {
+          window.open(resource.url, '_blank', 'noopener,noreferrer');
+          setIsLoading(false);
+          return;
+        }
       }
+
+      // Get the file URL
+      let fileUrl = resource.url;
+      
+      // If we have a file_path, construct the full URL
+      if (resource.file_path && !fileUrl.startsWith('http')) {
+        const baseURL = apiClient.getBaseURL().replace('/api/v1', '');
+        fileUrl = resource.file_path.startsWith('/') 
+          ? `${baseURL}${resource.file_path}` 
+          : `${baseURL}/storage/${resource.file_path}`;
+      }
+
+      // For PDFs and documents, open in new tab (browser will handle preview)
+      if (resource.type === 'pdf' || resource.type === 'document') {
+        if (fileUrl && fileUrl !== '#') {
+          // Try to open in a new tab for browser preview
+          window.open(fileUrl, '_blank', 'noopener,noreferrer');
+          setPreviewUrl(fileUrl);
+          setShowPreview(true);
+        } else {
+          // Fallback: try to get from API
+          const resourceId = resource.resourceId || resource._apiResource?.id || resource.id;
+          if (resourceId) {
+            const baseURL = apiClient.getBaseURL().replace('/api/v1', '');
+            const apiUrl = `${baseURL}/api/v1/resources/${resourceId}/download`;
+            window.open(apiUrl, '_blank', 'noopener,noreferrer');
+            setPreviewUrl(apiUrl);
+            setShowPreview(true);
+          }
+        }
+      } else if (resource.type === 'video') {
+        // For videos, try to embed or open
+        if (fileUrl && fileUrl !== '#') {
+          setPreviewUrl(fileUrl);
+          setShowPreview(true);
+        } else {
+          const resourceId = resource.resourceId || resource._apiResource?.id || resource.id;
+          if (resourceId) {
+            const baseURL = apiClient.getBaseURL().replace('/api/v1', '');
+            const apiUrl = `${baseURL}/api/v1/resources/${resourceId}/download`;
+            setPreviewUrl(apiUrl);
+            setShowPreview(true);
+          }
+        }
+      }
+      
       setIsLoading(false);
-    }, 1000);
+    } catch (error) {
+      console.error('Preview failed:', error);
+      setIsLoading(false);
+      // Fallback: try to open URL in new tab
+      if (resource.url && resource.url !== '#') {
+        window.open(resource.url, '_blank', 'noopener,noreferrer');
+      }
+    }
   };
 
   const handleDownload = () => {
@@ -115,8 +182,17 @@ export function ResourcePreviewModal({
     }
   };
 
+  // Reset preview when modal closes
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      setShowPreview(false);
+      setPreviewUrl(null);
+    }
+    onOpenChange(isOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
@@ -190,52 +266,82 @@ export function ResourcePreviewModal({
           {/* Preview Area */}
           <div className="space-y-4">
             <h4 className="font-semibold">Preview</h4>
-            <div className="border rounded-lg p-8 bg-muted/20 text-center">
-              {resource.type === 'video' && (
-                <div className="space-y-4">
-                  <Video className="h-16 w-16 text-muted-foreground mx-auto" />
-                  <div>
-                    <p className="font-medium">Video Preview</p>
-                    <p className="text-sm text-muted-foreground">
-                      Click the preview button to watch this video
-                    </p>
-                  </div>
+            <div className="border rounded-lg bg-muted/20">
+              {showPreview && previewUrl ? (
+                <div className="p-4">
+                  {resource.type === 'pdf' || resource.type === 'document' ? (
+                    <iframe
+                      src={previewUrl}
+                      className="w-full h-[500px] border-0 rounded"
+                      title={`Preview of ${resource.title}`}
+                      onError={() => {
+                        setShowPreview(false);
+                        window.open(previewUrl, '_blank', 'noopener,noreferrer');
+                      }}
+                    />
+                  ) : resource.type === 'video' ? (
+                    <video
+                      src={previewUrl}
+                      controls
+                      className="w-full rounded"
+                      onError={() => {
+                        setShowPreview(false);
+                        window.open(previewUrl, '_blank', 'noopener,noreferrer');
+                      }}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  ) : null}
                 </div>
-              )}
-              
-              {resource.type === 'pdf' && (
-                <div className="space-y-4">
-                  <FileText className="h-16 w-16 text-muted-foreground mx-auto" />
-                  <div>
-                    <p className="font-medium">PDF Document</p>
-                    <p className="text-sm text-muted-foreground">
-                      Click the preview button to view this document
-                    </p>
-                  </div>
-                </div>
-              )}
+              ) : (
+                <div className="p-8 text-center">
+                  {resource.type === 'video' && (
+                    <div className="space-y-4">
+                      <Video className="h-16 w-16 text-muted-foreground mx-auto" />
+                      <div>
+                        <p className="font-medium">Video Preview</p>
+                        <p className="text-sm text-muted-foreground">
+                          Click the preview button to watch this video
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {resource.type === 'pdf' && (
+                    <div className="space-y-4">
+                      <FileText className="h-16 w-16 text-muted-foreground mx-auto" />
+                      <div>
+                        <p className="font-medium">PDF Document</p>
+                        <p className="text-sm text-muted-foreground">
+                          Click the preview button to view this document
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
-              {resource.type === 'link' && (
-                <div className="space-y-4">
-                  <Link className="h-16 w-16 text-muted-foreground mx-auto" />
-                  <div>
-                    <p className="font-medium">External Link</p>
-                    <p className="text-sm text-muted-foreground">
-                      This will open in a new tab: {resource.url}
-                    </p>
-                  </div>
-                </div>
-              )}
+                  {resource.type === 'link' && (
+                    <div className="space-y-4">
+                      <Link className="h-16 w-16 text-muted-foreground mx-auto" />
+                      <div>
+                        <p className="font-medium">External Link</p>
+                        <p className="text-sm text-muted-foreground break-all">
+                          {resource.url && resource.url !== '#' ? resource.url : 'No URL available'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
-              {resource.type === 'document' && (
-                <div className="space-y-4">
-                  <FileText className="h-16 w-16 text-muted-foreground mx-auto" />
-                  <div>
-                    <p className="font-medium">Document</p>
-                    <p className="text-sm text-muted-foreground">
-                      Click the preview button to view this document
-                    </p>
-                  </div>
+                  {resource.type === 'document' && (
+                    <div className="space-y-4">
+                      <FileText className="h-16 w-16 text-muted-foreground mx-auto" />
+                      <div>
+                        <p className="font-medium">Document</p>
+                        <p className="text-sm text-muted-foreground">
+                          Click the preview button to view this document
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -249,17 +355,22 @@ export function ResourcePreviewModal({
               className="flex-1"
             >
               {isLoading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading...
+                </>
               ) : (
                 <>
                   {resource.type === 'link' ? (
                     <ExternalLink className="mr-2 h-4 w-4" />
+                  ) : showPreview ? (
+                    <Eye className="mr-2 h-4 w-4" />
                   ) : (
                     <Eye className="mr-2 h-4 w-4" />
                   )}
+                  {resource.type === 'link' ? 'Open Link' : showPreview ? 'Hide Preview' : 'Show Preview'}
                 </>
               )}
-              {resource.type === 'link' ? 'Open Link' : 'Preview'}
             </Button>
             
             <Button variant="outline" onClick={handleDownload}>

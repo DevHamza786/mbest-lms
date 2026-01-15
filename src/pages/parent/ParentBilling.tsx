@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
 import { useParentContext, useParentStore } from '@/lib/store/parentStore';
-import { parentService } from '@/lib/mocks/parent';
+import { parentApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import type { ParentInvoice } from '@/lib/store/parentStore';
 
@@ -66,8 +66,31 @@ export default function ParentBilling() {
     const loadInvoices = async () => {
       try {
         setLoading(true);
-        const invoicesData = await parentService.getInvoices();
-        setInvoices(invoicesData);
+        const invoicesData = await parentApi.getInvoices();
+        
+        // Map API response to store format
+        const mappedInvoices = invoicesData.map(inv => ({
+          id: inv.invoice_number || String(inv.id),
+          period: inv.period_start && inv.period_end
+            ? `${new Date(inv.period_start).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+            : new Date(inv.issue_date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+          amount: parseFloat(String(inv.amount || 0)) || 0, // Ensure amount is a number
+          status: (inv.status === 'paid' ? 'paid' : 
+                  inv.status === 'overdue' ? 'overdue' : 
+                  new Date(inv.due_date) < new Date() ? 'overdue' :
+                  new Date(inv.due_date).getTime() - new Date().getTime() < 7 * 24 * 60 * 60 * 1000 ? 'due_soon' : 
+                  'pending') as 'paid' | 'overdue' | 'due_soon' | 'pending',
+          issuedOn: inv.issue_date,
+          dueDate: inv.due_date,
+          lineItems: (inv.items || []).map(item => ({
+            description: item.description || '',
+            amount: parseFloat(String(item.amount || 0)) || 0, // Ensure item amount is a number
+            childId: String(inv.student_id || ''), // Use student_id from invoice
+          })),
+          _apiId: inv.id, // Store API ID for downloading
+        }));
+        
+        setInvoices(mappedInvoices);
       } catch (error) {
         console.error('Failed to load invoices:', error);
       } finally {
@@ -118,16 +141,81 @@ export default function ParentBilling() {
     }).format(amount);
   };
 
-  // Calculate totals
-  const totalPaid = invoices?.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + inv.amount, 0) || 0;
-  const totalPending = invoices?.filter(inv => inv.status === 'pending' || inv.status === 'due_soon').reduce((sum, inv) => sum + inv.amount, 0) || 0;
-  const totalOverdue = invoices?.filter(inv => inv.status === 'overdue').reduce((sum, inv) => sum + inv.amount, 0) || 0;
+  // Calculate totals - ensure amounts are parsed as numbers
+  const totalPaid = invoices?.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + (parseFloat(String(inv.amount || 0)) || 0), 0) || 0;
+  const totalPending = invoices?.filter(inv => inv.status === 'pending' || inv.status === 'due_soon').reduce((sum, inv) => sum + (parseFloat(String(inv.amount || 0)) || 0), 0) || 0;
+  const totalOverdue = invoices?.filter(inv => inv.status === 'overdue').reduce((sum, inv) => sum + (parseFloat(String(inv.amount || 0)) || 0), 0) || 0;
 
-  const handleDownloadInvoice = (invoiceId: string) => {
-    toast({
-      title: "Download Started",
-      description: `Invoice ${invoiceId} is being downloaded...`,
-    });
+  const handleDownloadInvoice = async (invoice: ParentInvoice) => {
+    try {
+      const apiId = (invoice as any)._apiId;
+      if (!apiId) {
+        toast({
+          title: "Error",
+          description: "Invoice ID not found",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const blob = await parentApi.downloadInvoicePdf(apiId);
+      
+      // Validate that we got a valid PDF blob
+      if (!blob || blob.size === 0) {
+        throw new Error('Empty or invalid PDF file received');
+      }
+      
+      // Check if blob is actually a PDF by checking the first few bytes
+      const firstBytes = await blob.slice(0, 4).arrayBuffer();
+      const uint8Array = new Uint8Array(firstBytes);
+      const pdfHeader = String.fromCharCode(...uint8Array);
+      
+      if (pdfHeader !== '%PDF') {
+        throw new Error('Invalid PDF file received');
+      }
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${invoice.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up after a short delay
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
+      
+      toast({
+        title: "Download Started",
+        description: `Invoice ${invoice.id} is being downloaded...`,
+      });
+    } catch (error: any) {
+      // Extract error message, ensuring it's a string and not JSON
+      let errorMessage = "PDF download is currently not available. Please contact support.";
+      
+      if (error && error.message) {
+        // If error.message is a string, use it
+        if (typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if (typeof error.message === 'object') {
+          // If error.message is an object, try to extract message from it
+          try {
+            errorMessage = JSON.parse(JSON.stringify(error.message)).message || errorMessage;
+          } catch {
+            errorMessage = String(error.message);
+          }
+        }
+      }
+      
+      console.error('Failed to download invoice:', errorMessage);
+      toast({
+        title: "Download Unavailable",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePayNow = (invoice: ParentInvoice) => {
@@ -350,7 +438,7 @@ export default function ParentBilling() {
                                   <Button 
                                     variant="outline" 
                                     className="flex-1"
-                                    onClick={() => handleDownloadInvoice(invoice.id)}
+                                    onClick={() => handleDownloadInvoice(invoice)}
                                   >
                                     <Download className="mr-2 h-4 w-4" />
                                     Download
@@ -372,7 +460,7 @@ export default function ParentBilling() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleDownloadInvoice(invoice.id)}
+                            onClick={() => handleDownloadInvoice(invoice)}
                           >
                             <Download className="h-4 w-4" />
                           </Button>

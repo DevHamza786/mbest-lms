@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
 import { useActiveChild } from '@/lib/store/parentStore';
+import { parentApi } from '@/lib/api';
 
 interface AttendanceRecord {
   id: string;
@@ -21,86 +22,67 @@ interface AttendanceRecord {
 
 export default function ParentAttendance() {
   const activeChild = useActiveChild();
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const [attendanceRecords] = useState<AttendanceRecord[]>([
-    {
-      id: 'att-1',
-      classId: 'class-1',
-      className: 'Advanced Mathematics Grade 12',
-      date: '2024-01-15',
-      time: '09:00 AM',
-      mode: 'online',
-      status: 'present',
-      markedBy: 'Dr. Sarah Johnson'
-    },
-    {
-      id: 'att-2',
-      classId: 'class-2',
-      className: 'Physics Grade 11',
-      date: '2024-01-15',
-      time: '02:00 PM',
-      mode: 'offline',
-      status: 'present',
-      markedBy: 'Prof. Michael Chen'
-    },
-    {
-      id: 'att-3',
-      classId: 'class-1',
-      className: 'Advanced Mathematics Grade 12',
-      date: '2024-01-14',
-      time: '09:00 AM',
-      mode: 'online',
-      status: 'late',
-      markedBy: 'Dr. Sarah Johnson'
-    },
-    {
-      id: 'att-4',
-      classId: 'class-3',
-      className: 'English Literature',
-      date: '2024-01-13',
-      time: '11:00 AM',
-      mode: 'offline',
-      status: 'absent',
-      markedBy: 'Mrs. Emily Davis'
-    },
-    {
-      id: 'att-5',
-      classId: 'class-2',
-      className: 'Physics Grade 11',
-      date: '2024-01-12',
-      time: '02:00 PM',
-      mode: 'offline',
-      status: 'present',
-      markedBy: 'Prof. Michael Chen'
+  // Load attendance records when active child changes
+  useEffect(() => {
+    if (!activeChild?.id) {
+      setAttendanceRecords([]);
+      return;
     }
-  ]);
 
-  const classStats = [
-    {
-      className: 'Advanced Mathematics Grade 12',
-      total: 20,
-      present: 18,
-      absent: 1,
-      late: 1,
-      rate: 90
-    },
-    {
-      className: 'Physics Grade 11',
-      total: 15,
-      present: 14,
-      absent: 0,
-      late: 1,
-      rate: 93
-    },
-    {
-      className: 'English Literature',
-      total: 18,
-      present: 16,
-      absent: 2,
-      late: 0,
-      rate: 89
+    const loadAttendance = async () => {
+      try {
+        setIsLoading(true);
+        const response = await parentApi.getChildAttendance(Number(activeChild.id));
+        
+        // Map API response to AttendanceRecord format
+        const records = response.records || [];
+        const mappedRecords: AttendanceRecord[] = records.map((r: any) => ({
+          id: String(r.id),
+          classId: r.class_id ? String(r.class_id) : '', 
+          className: r.subject || r.class_name || 'Unknown',
+          date: r.date,
+          time: r.start_time && r.end_time ? `${r.start_time} - ${r.end_time}` : '',
+          mode: 'offline', // Default, can be inferred from location if available
+          status: (r.attendance_status || 'absent') as 'present' | 'absent' | 'late',
+          markedBy: r.teacher?.user?.name || r.marked_by || 'Unknown',
+        }));
+        
+        setAttendanceRecords(mappedRecords);
+      } catch (error) {
+        console.error('Failed to load attendance:', error);
+        setAttendanceRecords([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAttendance();
+  }, [activeChild?.id]);
+
+  // Calculate class stats from attendance records
+  const classStats = attendanceRecords.reduce((acc, record) => {
+    const existing = acc.find(stat => stat.className === record.className);
+    if (existing) {
+      existing.total += 1;
+      if (record.status === 'present') existing.present += 1;
+      else if (record.status === 'absent') existing.absent += 1;
+      else if (record.status === 'late') existing.late += 1;
+      existing.rate = existing.total > 0 ? Math.round((existing.present / existing.total) * 100) : 0;
+    } else {
+      acc.push({
+        className: record.className,
+        total: 1,
+        present: record.status === 'present' ? 1 : 0,
+        absent: record.status === 'absent' ? 1 : 0,
+        late: record.status === 'late' ? 1 : 0,
+        rate: record.status === 'present' ? 100 : 0
+      });
     }
-  ];
+    return acc;
+  }, [] as Array<{ className: string; total: number; present: number; absent: number; late: number; rate: number }>);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -121,9 +103,52 @@ export default function ParentAttendance() {
       : 'bg-blue-500/10 text-blue-700 dark:text-blue-400';
   };
 
-  const overallRate = Math.round(
-    (attendanceRecords.filter(r => r.status === 'present').length / attendanceRecords.length) * 100
-  );
+  // Format date to readable format
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      // If parsing fails, try to extract just the date part
+      return dateString.split('T')[0];
+    }
+  };
+
+  // Format time to readable format (e.g., "1:00 PM - 3:00 PM")
+  const formatTime = (timeString: string) => {
+    if (!timeString) return '';
+    try {
+      // Handle time range format "HH:MM:SS - HH:MM:SS"
+      if (timeString.includes(' - ')) {
+        const [start, end] = timeString.split(' - ');
+        const formatSingleTime = (t: string) => {
+          const [hours, minutes] = t.split(':');
+          const hour = parseInt(hours, 10);
+          const ampm = hour >= 12 ? 'PM' : 'AM';
+          const displayHour = hour % 12 || 12;
+          return `${displayHour}:${minutes} ${ampm}`;
+        };
+        return `${formatSingleTime(start)} - ${formatSingleTime(end)}`;
+      }
+      // Handle single time
+      const [hours, minutes] = timeString.split(':');
+      const hour = parseInt(hours, 10);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${minutes} ${ampm}`;
+    } catch {
+      return timeString;
+    }
+  };
+
+  const overallRate = attendanceRecords.length > 0
+    ? Math.round((attendanceRecords.filter(r => r.status === 'present').length / attendanceRecords.length) * 100)
+    : 0;
   const totalPresent = attendanceRecords.filter(r => r.status === 'present').length;
   const totalAbsent = attendanceRecords.filter(r => r.status === 'absent').length;
   const totalLate = attendanceRecords.filter(r => r.status === 'late').length;
@@ -216,8 +241,8 @@ export default function ParentAttendance() {
                       <TableCell className="font-medium">{record.className}</TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <div>{record.date}</div>
-                          <div className="text-muted-foreground">{record.time}</div>
+                          <div className="font-medium">{formatDate(record.date)}</div>
+                          <div className="text-muted-foreground">{formatTime(record.time)}</div>
                         </div>
                       </TableCell>
                       <TableCell>

@@ -15,8 +15,11 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   useEffect(() => {
     // Hydrate session from localStorage on app startup
-    hydrateSession();
-    setIsHydrated(true);
+    const initSession = async () => {
+      await hydrateSession();
+      setIsHydrated(true);
+    };
+    initSession();
   }, [hydrateSession]);
 
   // Show loading spinner while hydrating session

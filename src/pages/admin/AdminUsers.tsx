@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Search, Filter, Plus, MoreVertical, User, Users, GraduationCap, UserCheck } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Search, Filter, Plus, MoreVertical, User, Users, GraduationCap, UserCheck, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -37,21 +37,144 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import usersData from '@/data/users.json';
+import { adminApi, AdminUser } from '@/lib/api/admin';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from '@/components/ui/pagination';
 
 export default function AdminUsers() {
   const { toast } = useToast();
-  const [users] = useState(usersData);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState('all');
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
-
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    return matchesSearch && matchesRole;
+  const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [viewProfileDialogOpen, setViewProfileDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  
+  // Form states
+  const [addUserForm, setAddUserForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    role: '',
+    password: '',
   });
+  const [editUserForm, setEditUserForm] = useState({
+    name: '',
+    email: '',
+    role: '',
+    phone: '',
+    is_active: true,
+  });
+  const [resetPasswordForm, setResetPasswordForm] = useState({
+    password: '',
+    confirmPassword: '',
+  });
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage] = useState(10);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [lastPage, setLastPage] = useState(1);
+
+  // Stats
+  const [stats, setStats] = useState({
+    total: 0,
+    students: 0,
+    tutors: 0,
+    parents: 0,
+  });
+
+  // Fetch user stats from API
+  const fetchUserStats = async () => {
+    try {
+      const statsData = await adminApi.getUserStats();
+      setStats(statsData);
+    } catch (err: any) {
+      console.error('Failed to fetch user stats:', err);
+      // Don't show error toast for stats, just log it
+    }
+  };
+
+  // Fetch users
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const params: any = {
+        per_page: perPage,
+        page: currentPage,
+      };
+
+      // Apply role filter based on active tab
+      if (activeTab !== 'all') {
+        params.role = activeTab === 'students' ? 'student' : activeTab.slice(0, -1); // Remove 's' from end
+      } else if (roleFilter !== 'all') {
+        params.role = roleFilter;
+      }
+
+      // Apply search
+      if (searchTerm) {
+        params.search = searchTerm;
+      }
+
+      const result = await adminApi.getUsers(params);
+      
+      // Backend already excludes admin users, but double-check
+      const filteredUsers = result.users.filter(u => u.role !== 'admin');
+      setUsers(filteredUsers);
+      setTotalUsers(result.total);
+      setLastPage(result.last_page);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch users');
+      toast({
+        title: "Error",
+        description: err.message || 'Failed to fetch users',
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch stats on component mount
+  useEffect(() => {
+    fetchUserStats();
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [activeTab, roleFilter]);
+
+  // Debounce search separately
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, roleFilter, searchTerm, currentPage]);
+
+  // Refresh stats after user operations
+  const refreshStats = () => {
+    fetchUserStats();
+  };
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -73,54 +196,259 @@ export default function AdminUsers() {
     }
   };
 
-  const handleAddUser = () => {
-    toast({
-      title: "User Added",
-      description: "New user has been created successfully.",
-    });
-    setAddUserDialogOpen(false);
+  const handleAddUser = async () => {
+    try {
+      if (!addUserForm.firstName || !addUserForm.lastName || !addUserForm.email || !addUserForm.role || !addUserForm.password) {
+        toast({
+          title: "Validation Error",
+          description: "Please fill in all required fields",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await adminApi.createUser({
+        name: `${addUserForm.firstName} ${addUserForm.lastName}`,
+        email: addUserForm.email,
+        password: addUserForm.password,
+        role: addUserForm.role,
+      });
+
+      toast({
+        title: "Success",
+        description: "User created successfully",
+      });
+      
+      setAddUserDialogOpen(false);
+      setAddUserForm({
+        firstName: '',
+        lastName: '',
+        email: '',
+        role: '',
+        password: '',
+      });
+      fetchUsers();
+      refreshStats();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || 'Failed to create user',
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleEditUser = (userId: string) => {
-    toast({
-      title: "User Updated",
-      description: "User information has been updated successfully.",
+  const handleEditUser = (user: AdminUser) => {
+    setSelectedUser(user);
+    setEditUserForm({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      phone: user.phone || '',
+      is_active: user.is_active,
     });
+    setEditUserDialogOpen(true);
   };
 
-  const handleDeactivateUser = (userId: string) => {
-    toast({
-      title: "User Deactivated",
-      description: "User account has been deactivated.",
+  const handleUpdateUser = async () => {
+    if (!selectedUser) return;
+
+    try {
+      await adminApi.updateUser(selectedUser.id, editUserForm);
+      toast({
+        title: "Success",
+        description: "User updated successfully",
+      });
+      setEditUserDialogOpen(false);
+      setSelectedUser(null);
+      fetchUsers();
+      refreshStats();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || 'Failed to update user',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleResetPassword = (user: AdminUser) => {
+    setSelectedUser(user);
+    setResetPasswordForm({
+      password: '',
+      confirmPassword: '',
     });
+    setResetPasswordDialogOpen(true);
+  };
+
+  const handleResetPasswordSubmit = async () => {
+    if (!selectedUser) return;
+
+    if (!resetPasswordForm.password || resetPasswordForm.password.length < 8) {
+      toast({
+        title: "Validation Error",
+        description: "Password must be at least 8 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (resetPasswordForm.password !== resetPasswordForm.confirmPassword) {
+      toast({
+        title: "Validation Error",
+        description: "Passwords do not match",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await adminApi.resetUserPassword(selectedUser.id, resetPasswordForm.password);
+      toast({
+        title: "Success",
+        description: "Password reset successfully",
+      });
+      setResetPasswordDialogOpen(false);
+      setSelectedUser(null);
+      setResetPasswordForm({
+        password: '',
+        confirmPassword: '',
+      });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || 'Failed to reset password',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeactivateUser = async (user: AdminUser) => {
+    try {
+      await adminApi.updateUser(user.id, { is_active: !user.is_active });
+      toast({
+        title: "Success",
+        description: user.is_active ? "User deactivated successfully" : "User activated successfully",
+      });
+      fetchUsers();
+      refreshStats();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || 'Failed to update user status',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteUser = async (user: AdminUser) => {
+    if (!confirm(`Are you sure you want to delete ${user.name}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await adminApi.deleteUser(user.id);
+      toast({
+        title: "Success",
+        description: "User deleted successfully",
+      });
+      fetchUsers();
+      refreshStats();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || 'Failed to delete user',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleViewProfile = (user: AdminUser) => {
+    setSelectedUser(user);
+    setViewProfileDialogOpen(true);
   };
 
   const userStats = [
     {
       role: 'Total Users',
-      count: users.length,
+      count: stats.total,
       icon: Users,
       color: 'text-blue-600'
     },
     {
       role: 'Students',
-      count: users.filter(u => u.role === 'student').length,
+      count: stats.students,
       icon: User,
       color: 'text-green-600'
     },
     {
       role: 'Tutors',
-      count: users.filter(u => u.role === 'tutor').length,
+      count: stats.tutors,
       icon: GraduationCap,
       color: 'text-purple-600'
     },
     {
       role: 'Parents',
-      count: users.filter(u => u.role === 'parent').length,
+      count: stats.parents,
       icon: Users,
       color: 'text-orange-600'
     },
   ];
+
+  // Get department from tutor relationship
+  const getDepartment = (user: AdminUser) => {
+    if (user.role === 'tutor' && (user as any).tutor?.department) {
+      return (user as any).tutor.department;
+    }
+    return '-';
+  };
+
+  // Get specialization from tutor relationship
+  const getSpecialization = (user: AdminUser) => {
+    if (user.role === 'tutor' && (user as any).tutor?.specialization) {
+      return (user as any).tutor.specialization;
+    }
+    return [];
+  };
+
+  // Filter users for display (client-side filtering for tabs, excluding admins)
+  const displayedUsers = useMemo(() => {
+    // Already filtered in fetchUsers, but double-check to exclude admins
+    let filtered = users.filter(user => user.role !== 'admin');
+    
+    if (activeTab === 'all') {
+      return filtered;
+    }
+    const roleMap: Record<string, string> = {
+      'students': 'student',
+      'tutors': 'tutor',
+      'parents': 'parent',
+    };
+    return filtered.filter(user => user.role === roleMap[activeTab]);
+  }, [users, activeTab]);
+
+  // Memoize student users to avoid re-filtering
+  const studentUsers = useMemo(() => {
+    return displayedUsers.filter(user => user.role === 'student');
+  }, [displayedUsers]);
+
+  // Memoize tutor users
+  const tutorUsers = useMemo(() => {
+    return displayedUsers.filter(user => user.role === 'tutor');
+  }, [displayedUsers]);
+
+  // Memoize parent users
+  const parentUsers = useMemo(() => {
+    return displayedUsers.filter(user => user.role === 'parent');
+  }, [displayedUsers]);
+
+  if (loading && users.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -149,21 +477,40 @@ export default function AdminUsers() {
             <div className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" placeholder="Enter first name" />
+                  <Label htmlFor="firstName">First Name *</Label>
+                  <Input 
+                    id="firstName" 
+                    placeholder="Enter first name"
+                    value={addUserForm.firstName}
+                    onChange={(e) => setAddUserForm({ ...addUserForm, firstName: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" placeholder="Enter last name" />
+                  <Label htmlFor="lastName">Last Name *</Label>
+                  <Input 
+                    id="lastName" 
+                    placeholder="Enter last name"
+                    value={addUserForm.lastName}
+                    onChange={(e) => setAddUserForm({ ...addUserForm, lastName: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input id="email" type="email" placeholder="Enter email address" />
+                <Label htmlFor="email">Email Address *</Label>
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="Enter email address"
+                  value={addUserForm.email}
+                  onChange={(e) => setAddUserForm({ ...addUserForm, email: e.target.value })}
+                />
               </div>
               <div className="space-y-2">
-                <Label>Role</Label>
-                <Select>
+                <Label>Role *</Label>
+                <Select 
+                  value={addUserForm.role} 
+                  onValueChange={(value) => setAddUserForm({ ...addUserForm, role: value })}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select user role" />
                   </SelectTrigger>
@@ -176,8 +523,14 @@ export default function AdminUsers() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Temporary Password</Label>
-                <Input id="password" type="password" placeholder="Enter temporary password" />
+                <Label htmlFor="password">Temporary Password *</Label>
+                <Input 
+                  id="password" 
+                  type="password" 
+                  placeholder="Enter temporary password"
+                  value={addUserForm.password}
+                  onChange={(e) => setAddUserForm({ ...addUserForm, password: e.target.value })}
+                />
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setAddUserDialogOpen(false)}>
@@ -210,7 +563,7 @@ export default function AdminUsers() {
         })}
       </div>
 
-      <Tabs defaultValue="all" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="all">All Users</TabsTrigger>
           <TabsTrigger value="students">Students</TabsTrigger>
@@ -255,250 +608,559 @@ export default function AdminUsers() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Joined</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={user.avatar} alt={user.name} />
-                            <AvatarFallback>
-                              {user.name.split(' ').map(n => n[0]).join('')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium">{user.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getRoleColor(user.role)}>
-                          <div className="flex items-center gap-1">
-                            {getRoleIcon(user.role)}
-                            {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                          </div>
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.department || '-'}</TableCell>
-                      <TableCell>
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditUser(user.id)}>
-                              Edit User
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>View Profile</DropdownMenuItem>
-                            <DropdownMenuItem>Reset Password</DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={() => handleDeactivateUser(user.id)}
-                            >
-                              Deactivate
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : error ? (
+                <div className="text-center py-8 text-destructive">{error}</div>
+              ) : displayedUsers.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No users found</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Active</TableHead>
+                      <TableHead>Joined</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {displayedUsers.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={user.avatar || undefined} alt={user.name} />
+                              <AvatarFallback>
+                                {user.name.split(' ').map(n => n[0]).join('')}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium">{user.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getRoleColor(user.role)}>
+                            <div className="flex items-center gap-1">
+                              {getRoleIcon(user.role)}
+                              {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                            </div>
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>{getDepartment(user)}</TableCell>
+                        <TableCell>
+                          <Badge variant={user.is_active ? 'default' : 'secondary'}>
+                            {user.is_active ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                                Edit User
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleViewProfile(user)}>
+                                View Profile
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleResetPassword(user)}>
+                                Reset Password
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeactivateUser(user)}
+                              >
+                                {user.is_active ? 'Deactivate' : 'Activate'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleDeleteUser(user)}
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              {!loading && !error && displayedUsers.length > 0 && lastPage > 1 && (
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {((currentPage - 1) * perPage) + 1} to {Math.min(currentPage * perPage, totalUsers)} of {totalUsers} users
+                  </div>
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+                          className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        />
+                      </PaginationItem>
+                      {(() => {
+                        const pages = [];
+                        const maxPages = 5;
+                        let startPage = Math.max(1, currentPage - Math.floor(maxPages / 2));
+                        let endPage = Math.min(lastPage, startPage + maxPages - 1);
+                        
+                        if (endPage - startPage < maxPages - 1) {
+                          startPage = Math.max(1, endPage - maxPages + 1);
+                        }
+                        
+                        for (let i = startPage; i <= endPage; i++) {
+                          pages.push(i);
+                        }
+                        
+                        return pages.map((pageNum) => (
+                          <PaginationItem key={pageNum}>
+                            <PaginationLink
+                              onClick={() => setCurrentPage(pageNum)}
+                              isActive={currentPage === pageNum}
+                              className="cursor-pointer"
+                            >
+                              {pageNum}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ));
+                      })()}
+                      <PaginationItem>
+                        <PaginationNext 
+                          onClick={() => currentPage < lastPage && setCurrentPage(currentPage + 1)}
+                          className={currentPage === lastPage ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="students" className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {users.filter(user => user.role === 'student').map((student) => (
-              <Card key={student.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={student.avatar} alt={student.name} />
-                        <AvatarFallback>
-                          {student.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <CardTitle className="text-lg">{student.name}</CardTitle>
-                        <CardDescription>{student.email}</CardDescription>
+            {loading ? (
+              <div className="col-span-full flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : studentUsers.length === 0 ? (
+              <div className="col-span-full text-center py-8 text-muted-foreground">No students found</div>
+            ) : (
+              studentUsers.map((student) => (
+                <Card key={student.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={student.avatar || undefined} alt={student.name} />
+                          <AvatarFallback>
+                            {student.name.split(' ').map(n => n[0]).join('')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <CardTitle className="text-lg">{student.name}</CardTitle>
+                          <CardDescription>{student.email}</CardDescription>
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleViewProfile(student)}>View Details</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditUser(student)}>Edit Student</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleResetPassword(student)}>Reset Password</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm">
+                      {student.student?.grade && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Grade:</span>
+                          <span className="font-medium">{student.student.grade}</span>
+                        </div>
+                      )}
+                      {student.student?.enrollment_id && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Enrollment ID:</span>
+                          <span className="font-medium">{student.student.enrollment_id}</span>
+                        </div>
+                      )}
+                      {student.parents_data && student.parents_data.length > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Parent(s):</span>
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            {student.parents_data.map((parent) => (
+                              <div key={parent.id} className="flex items-center gap-2">
+                                <Avatar className="h-6 w-6">
+                                  <AvatarImage src={parent.avatar || undefined} alt={parent.name} />
+                                  <AvatarFallback className="text-xs">
+                                    {parent.name.split(' ').map(n => n[0]).join('')}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs font-medium">{parent.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Joined:</span>
+                        <span className="font-medium">
+                          {new Date(student.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Status:</span>
+                        <Badge variant={student.is_active ? 'default' : 'secondary'}>
+                          {student.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
                       </div>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuItem>Edit Student</DropdownMenuItem>
-                        <DropdownMenuItem>View Grades</DropdownMenuItem>
-                        <DropdownMenuItem>Contact Parent</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Grade:</span>
-                      <span className="font-medium">{(student as any).grade || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Enrollment ID:</span>
-                      <span className="font-medium">{(student as any).enrollmentId || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Joined:</span>
-                      <span className="font-medium">
-                        {new Date(student.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </TabsContent>
 
         <TabsContent value="tutors" className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {users.filter(user => user.role === 'tutor').map((tutor) => (
-              <Card key={tutor.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={tutor.avatar} alt={tutor.name} />
-                        <AvatarFallback>
-                          {tutor.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <CardTitle className="text-lg">{tutor.name}</CardTitle>
-                        <CardDescription>{tutor.email}</CardDescription>
+            {loading ? (
+              <div className="col-span-full flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : tutorUsers.length === 0 ? (
+              <div className="col-span-full text-center py-8 text-muted-foreground">No tutors found</div>
+            ) : (
+              tutorUsers.map((tutor) => (
+                <Card key={tutor.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={tutor.avatar || undefined} alt={tutor.name} />
+                          <AvatarFallback>
+                            {tutor.name.split(' ').map(n => n[0]).join('')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <CardTitle className="text-lg">{tutor.name}</CardTitle>
+                          <CardDescription>{tutor.email}</CardDescription>
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleViewProfile(tutor)}>View Details</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditUser(tutor)}>Edit Tutor</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleResetPassword(tutor)}>Reset Password</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Department:</span>
+                        <span className="font-medium">{getDepartment(tutor)}</span>
+                      </div>
+                      {getSpecialization(tutor).length > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Specializations:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {getSpecialization(tutor).map((spec: string) => (
+                              <Badge key={spec} variant="outline" className="text-xs">
+                                {spec}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Joined:</span>
+                        <span className="font-medium">
+                          {new Date(tutor.created_at).toLocaleDateString()}
+                        </span>
                       </div>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuItem>Edit Tutor</DropdownMenuItem>
-                        <DropdownMenuItem>View Classes</DropdownMenuItem>
-                        <DropdownMenuItem>Performance Report</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Department:</span>
-                      <span className="font-medium">{tutor.department}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Specializations:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {((tutor as any).specialization || []).map((spec: string) => (
-                          <Badge key={spec} variant="outline" className="text-xs">
-                            {spec}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Joined:</span>
-                      <span className="font-medium">
-                        {new Date(tutor.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </TabsContent>
 
         <TabsContent value="parents" className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {users.filter(user => user.role === 'parent').map((parent) => (
-              <Card key={parent.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={parent.avatar} alt={parent.name} />
-                        <AvatarFallback>
-                          {parent.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <CardTitle className="text-lg">{parent.name}</CardTitle>
-                        <CardDescription>{parent.email}</CardDescription>
+            {loading ? (
+              <div className="col-span-full flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : parentUsers.length === 0 ? (
+              <div className="col-span-full text-center py-8 text-muted-foreground">No parents found</div>
+            ) : (
+              parentUsers.map((parent) => (
+                <Card key={parent.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={parent.avatar || undefined} alt={parent.name} />
+                          <AvatarFallback>
+                            {parent.name.split(' ').map(n => n[0]).join('')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <CardTitle className="text-lg">{parent.name}</CardTitle>
+                          <CardDescription>{parent.email}</CardDescription>
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleViewProfile(parent)}>View Details</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditUser(parent)}>Edit Parent</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleResetPassword(parent)}>Reset Password</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Joined:</span>
+                        <span className="font-medium">
+                          {new Date(parent.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Status:</span>
+                        <Badge variant={parent.is_active ? 'default' : 'secondary'}>
+                          {parent.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
                       </div>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuItem>Edit Parent</DropdownMenuItem>
-                        <DropdownMenuItem>View Children</DropdownMenuItem>
-                        <DropdownMenuItem>Billing History</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Relationship:</span>
-                      <span className="font-medium">{(parent as any).relationship || 'Guardian'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Children:</span>
-                      <span className="font-medium">
-                        {((parent as any).children || []).length} student(s)
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Joined:</span>
-                      <span className="font-medium">
-                        {new Date(parent.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit User Dialog */}
+      <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Update user information
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="editName">Full Name *</Label>
+              <Input 
+                id="editName" 
+                placeholder="Enter full name"
+                value={editUserForm.name}
+                onChange={(e) => setEditUserForm({ ...editUserForm, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editEmail">Email Address *</Label>
+              <Input 
+                id="editEmail" 
+                type="email" 
+                placeholder="Enter email address"
+                value={editUserForm.email}
+                onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editPhone">Phone</Label>
+              <Input 
+                id="editPhone" 
+                placeholder="Enter phone number"
+                value={editUserForm.phone}
+                onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select 
+                value={editUserForm.is_active ? 'active' : 'inactive'} 
+                onValueChange={(value) => setEditUserForm({ ...editUserForm, is_active: value === 'active' })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditUserDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateUser}>
+                Update User
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {selectedUser?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password *</Label>
+              <Input 
+                id="newPassword" 
+                type="password" 
+                placeholder="Enter new password (min 8 characters)"
+                value={resetPasswordForm.password}
+                onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, password: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password *</Label>
+              <Input 
+                id="confirmPassword" 
+                type="password" 
+                placeholder="Confirm new password"
+                value={resetPasswordForm.confirmPassword}
+                onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, confirmPassword: e.target.value })}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setResetPasswordDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleResetPasswordSubmit}>
+                Reset Password
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Profile Dialog */}
+      <Dialog open={viewProfileDialogOpen} onOpenChange={setViewProfileDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>User Profile</DialogTitle>
+            <DialogDescription>
+              View detailed information about {selectedUser?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedUser && (
+            <div className="space-y-4 mt-4">
+              <div className="flex items-center gap-4">
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={selectedUser.avatar || undefined} alt={selectedUser.name} />
+                  <AvatarFallback className="text-lg">
+                    {selectedUser.name.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="text-xl font-semibold">{selectedUser.name}</h3>
+                  <p className="text-muted-foreground">{selectedUser.email}</p>
+                  <Badge variant={getRoleColor(selectedUser.role)} className="mt-2">
+                    <div className="flex items-center gap-1">
+                      {getRoleIcon(selectedUser.role)}
+                      {selectedUser.role.charAt(0).toUpperCase() + selectedUser.role.slice(1)}
+                    </div>
+                  </Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                <div>
+                  <Label className="text-muted-foreground">Phone</Label>
+                  <p className="font-medium">{selectedUser.phone || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Status</Label>
+                  <p className="font-medium">
+                    <Badge variant={selectedUser.is_active ? 'default' : 'secondary'}>
+                      {selectedUser.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Department</Label>
+                  <p className="font-medium">{getDepartment(selectedUser)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Joined</Label>
+                  <p className="font-medium">
+                    {new Date(selectedUser.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                {selectedUser.role === 'tutor' && getSpecialization(selectedUser).length > 0 && (
+                  <div className="col-span-2">
+                    <Label className="text-muted-foreground">Specializations</Label>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {getSpecialization(selectedUser).map((spec: string) => (
+                        <Badge key={spec} variant="outline" className="text-xs">
+                          {spec}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setViewProfileDialogOpen(false)}>
+                  Close
+                </Button>
+                <Button onClick={() => {
+                  setViewProfileDialogOpen(false);
+                  handleEditUser(selectedUser);
+                }}>
+                  Edit User
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -12,25 +12,52 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useSession } from '@/lib/store/authStore';
+import { commonApi } from '@/lib/api';
 import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
+import { useEffect, useRef } from 'react';
 
 export default function ParentProfile() {
   const session = useSession();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [profileData, setProfileData] = useState({
     name: session?.name || '',
     email: session?.email || '',
-    phone: '+1 (555) 123-4567',
-    location: 'New York, NY',
-    bio: 'Dedicated parent supporting my child\'s educational journey.',
+    phone: '',
+    location: '',
+    bio: '',
     timezone: 'America/New_York',
     language: 'English',
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+  
+  // Load profile data on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setIsLoading(true);
+        const profile = await commonApi.profile.get();
+        setProfileData(prev => ({
+          ...prev,
+          name: profile.name || prev.name,
+          email: profile.email || prev.email,
+          phone: profile.phone || prev.phone,
+          location: profile.address || prev.location,
+        }));
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadProfile();
+  }, []);
 
   const [preferences, setPreferences] = useState({
     emailNotifications: true,
@@ -44,14 +71,33 @@ export default function ParentProfile() {
     autoSave: true,
   });
 
-  const handleProfileUpdate = () => {
-    toast({
-      title: "Profile Updated",
-      description: "Your profile information has been saved successfully.",
-    });
+  const handleProfileUpdate = async () => {
+    try {
+      setIsLoading(true);
+      await commonApi.profile.update({
+        name: profileData.name,
+        email: profileData.email,
+        phone: profileData.phone || null,
+        address: profileData.location || null,
+      });
+      
+      toast({
+        title: "Profile Updated",
+        description: "Your profile information has been saved successfully.",
+      });
+    } catch (error: any) {
+      console.error('Failed to update profile:', error);
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handlePasswordChange = () => {
+  const handlePasswordChange = async () => {
     if (profileData.newPassword !== profileData.confirmPassword) {
       toast({
         title: "Password Mismatch",
@@ -61,17 +107,44 @@ export default function ParentProfile() {
       return;
     }
     
-    toast({
-      title: "Password Changed",
-      description: "Your password has been updated successfully.",
-    });
+    if (!profileData.currentPassword) {
+      toast({
+        title: "Current Password Required",
+        description: "Please enter your current password.",
+        variant: "destructive",
+      });
+      return;
+    }
     
-    setProfileData(prev => ({
-      ...prev,
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    }));
+    try {
+      setIsLoading(true);
+      await commonApi.profile.changePassword({
+        current_password: profileData.currentPassword,
+        password: profileData.newPassword,
+        password_confirmation: profileData.confirmPassword,
+      });
+      
+      toast({
+        title: "Password Changed",
+        description: "Your password has been updated successfully.",
+      });
+      
+      setProfileData(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      }));
+    } catch (error: any) {
+      console.error('Failed to change password:', error);
+      toast({
+        title: "Password Change Failed",
+        description: error.message || "Failed to change password. Please check your current password and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handlePreferencesUpdate = () => {
@@ -122,7 +195,47 @@ export default function ParentProfile() {
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary">{session?.role}</Badge>
                   </div>
-                  <Button variant="outline" size="sm">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      
+                      try {
+                        setIsLoading(true);
+                        const updatedProfile = await commonApi.profile.uploadAvatar(file);
+                        toast({
+                          title: "Avatar Updated",
+                          description: "Your profile picture has been updated successfully.",
+                        });
+                        // Update session/context if needed
+                        if (session) {
+                          session.avatar = updatedProfile.avatar || undefined;
+                        }
+                      } catch (error: any) {
+                        console.error('Failed to upload avatar:', error);
+                        toast({
+                          title: "Upload Failed",
+                          description: error.message || "Failed to upload avatar. Please try again.",
+                          variant: "destructive",
+                        });
+                      } finally {
+                        setIsLoading(false);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = '';
+                        }
+                      }
+                    }}
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading}
+                  >
                     <Camera className="mr-2 h-4 w-4" />
                     Change Photo
                   </Button>
@@ -229,9 +342,9 @@ export default function ParentProfile() {
                 />
               </div>
 
-              <Button onClick={handleProfileUpdate}>
+              <Button onClick={handleProfileUpdate} disabled={isLoading}>
                 <Save className="mr-2 h-4 w-4" />
-                Save Changes
+                {isLoading ? 'Saving...' : 'Save Changes'}
               </Button>
             </CardContent>
           </Card>
@@ -287,9 +400,9 @@ export default function ParentProfile() {
                 />
               </div>
 
-              <Button onClick={handlePasswordChange}>
+              <Button onClick={handlePasswordChange} disabled={isLoading}>
                 <Save className="mr-2 h-4 w-4" />
-                Update Password
+                {isLoading ? 'Updating...' : 'Update Password'}
               </Button>
             </CardContent>
           </Card>

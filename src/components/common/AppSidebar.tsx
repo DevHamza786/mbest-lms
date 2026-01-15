@@ -25,6 +25,9 @@ import { Badge } from '@/components/ui/badge';
 import { useAuthStore, useSession } from '@/lib/store/authStore';
 import { getNavForRole } from '@/features/navigation/config';
 import { roleDisplayNames } from '@/features/auth/schemas';
+import { useUnreadMessagesCount } from '@/hooks/useUnreadMessagesCount';
+import { usePendingAssignmentsCount } from '@/hooks/usePendingAssignmentsCount';
+import { usePendingLessonRequestsCount } from '@/hooks/usePendingLessonRequestsCount';
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -32,6 +35,9 @@ export function AppSidebar() {
   const { logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
+  const { unreadCount } = useUnreadMessagesCount();
+  const { pendingCount: pendingAssignmentsCount } = usePendingAssignmentsCount();
+  const { pendingCount: pendingLessonRequestsCount } = usePendingLessonRequestsCount();
 
   if (!session) return null;
 
@@ -54,15 +60,19 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="h-16 border-b border-border">
         <div className="flex items-center gap-3 px-3 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-            LMS
+          <div className="flex items-center justify-center">
+            <img 
+              src="/M.B.E.S.T-logo.png" 
+              alt="MBEST Logo" 
+              className={`${isCollapsed ? 'h-10 w-10' : 'w-auto'} object-contain`}
+            />
           </div>
           {!isCollapsed && (
-            <div className="flex flex-col">
-              <h2 className="text-lg font-bold text-sidebar-foreground">
+            <div className="flex flex-col flex-1 min-w-0">
+              <h2 className="text-lg font-bold text-sidebar-foreground truncate">
                 MBEST
               </h2>
-              <p className="text-xs text-sidebar-foreground/70">
+              <p className="text-xs text-sidebar-foreground/70 truncate">
                 Learning Management System
               </p>
             </div>
@@ -92,14 +102,34 @@ export function AppSidebar() {
                         {!isCollapsed && (
                           <>
                             <span className="flex-1">{item.label}</span>
-                            {item.badge && (
-                              <Badge 
-                                variant={typeof item.badge === 'string' ? 'destructive' : 'secondary'} 
-                                className="ml-auto text-xs"
-                              >
-                                {item.badge}
-                              </Badge>
-                            )}
+                            {(() => {
+                              // For Messages, use real-time unread count
+                              if (item.href.includes('/messaging') || item.href.includes('/messages')) {
+                                return unreadCount > 0 ? (
+                                  <Badge variant="default" className="ml-auto text-xs bg-blue-500 hover:bg-blue-600 text-white border-blue-600">
+                                    {unreadCount}
+                                  </Badge>
+                                ) : null;
+                              }
+                              // For Assignments, use real-time pending count
+                              if (item.href.includes('/assignments') && session.role === 'tutor') {
+                                return pendingAssignmentsCount > 0 ? (
+                                  <Badge variant="default" className="ml-auto text-xs bg-blue-500 hover:bg-blue-600 text-white border-blue-600">
+                                    {pendingAssignmentsCount}
+                                  </Badge>
+                                ) : null;
+                              }
+                              // For Lesson Requests, use real-time pending count
+                              if (item.href.includes('/lesson-requests') && session.role === 'tutor') {
+                                return pendingLessonRequestsCount > 0 ? (
+                                  <Badge variant="default" className="ml-auto text-xs bg-blue-500 hover:bg-blue-600 text-white border-blue-600">
+                                    {pendingLessonRequestsCount}
+                                  </Badge>
+                                ) : null;
+                              }
+                              // For other items, use the badge from config (but don't show it, as we want real-time counts only)
+                              return null;
+                            })()}
                           </>
                         )}
                       </NavLink>
@@ -119,7 +149,16 @@ export function AppSidebar() {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
                   <Avatar className="h-6 w-6">
-                    <AvatarImage src={session.avatar} alt={session.name} />
+                    <AvatarImage 
+                      src={session.avatar ? (
+                        session.avatar.startsWith('http') 
+                          ? session.avatar 
+                          : session.avatar.startsWith('/')
+                          ? `${import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000'}${session.avatar}`
+                          : `${import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000'}/storage/${session.avatar}`
+                      ) : undefined} 
+                      alt={session.name} 
+                    />
                     <AvatarFallback className="text-xs">
                       {session.name
                         .split(' ')
@@ -148,7 +187,16 @@ export function AppSidebar() {
               >
                 <div className="flex items-center gap-2 p-2">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={session.avatar} alt={session.name} />
+                    <AvatarImage 
+                      src={session.avatar ? (
+                        session.avatar.startsWith('http') 
+                          ? session.avatar 
+                          : session.avatar.startsWith('/')
+                          ? `${import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000'}${session.avatar}`
+                          : `${import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000'}/storage/${session.avatar}`
+                      ) : undefined} 
+                      alt={session.name} 
+                    />
                     <AvatarFallback>
                       {session.name
                         .split(' ')

@@ -18,25 +18,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Send, BookOpen } from 'lucide-react';
+import { Send, BookOpen, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { commonApi } from '@/lib/api';
 
 interface ResourceRequestModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRequestSubmitted?: () => void;
 }
 
-export function ResourceRequestModal({ open, onOpenChange }: ResourceRequestModalProps) {
+export function ResourceRequestModal({ open, onOpenChange, onRequestSubmitted }: ResourceRequestModalProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     category: '',
-    priority: 'medium',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     type: '',
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.title || !formData.description || !formData.category || !formData.type) {
@@ -48,22 +51,46 @@ export function ResourceRequestModal({ open, onOpenChange }: ResourceRequestModa
       return;
     }
 
-    // Simulate API call
-    toast({
-      title: "Resource Request Submitted",
-      description: `Your request for "${formData.title}" has been submitted successfully. We'll review it and get back to you soon.`,
-    });
+    try {
+      setIsSubmitting(true);
+      await commonApi.resourceRequests.create({
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        type: formData.type,
+        priority: formData.priority,
+      });
 
-    // Reset form
-    setFormData({
-      title: '',
-      description: '',
-      category: '',
-      priority: 'medium',
-      type: '',
-    });
-    
-    onOpenChange(false);
+      toast({
+        title: "Resource Request Submitted",
+        description: `Your request for "${formData.title}" has been submitted successfully. We'll review it and get back to you soon.`,
+      });
+
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        category: '',
+        priority: 'medium',
+        type: '',
+      });
+      
+      // Notify parent component to refresh requests list
+      if (onRequestSubmitted) {
+        onRequestSubmitted();
+      }
+      
+      onOpenChange(false);
+    } catch (error: any) {
+      console.error('Failed to submit resource request:', error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to submit resource request. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -163,12 +190,26 @@ export function ResourceRequestModal({ open, onOpenChange }: ResourceRequestModa
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
-            <Button type="submit">
-              <Send className="mr-2 h-4 w-4" />
-              Submit Request
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Submit Request
+                </>
+              )}
             </Button>
           </DialogFooter>
         </form>

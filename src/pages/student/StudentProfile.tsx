@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { User, Mail, Phone, MapPin, Camera, Save, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { User, Mail, Phone, MapPin, Camera, Save, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,24 +12,53 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useSession } from '@/lib/store/authStore';
+import { commonApi } from '@/lib/api';
 
 export default function StudentProfile() {
   const session = useSession();
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   
   const [profileData, setProfileData] = useState({
     name: session?.name || '',
     email: session?.email || '',
-    phone: '+1 (555) 123-4567',
-    location: 'New York, NY',
-    bio: 'Passionate student pursuing excellence in computer science and mathematics.',
+    phone: session?.phone || '',
+    address: session?.address || '',
+    bio: '',
     timezone: 'America/New_York',
     language: 'English',
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setIsLoading(true);
+        const profile = await commonApi.profile.get();
+        setProfileData(prev => ({
+          ...prev,
+          name: profile.name || prev.name,
+          email: profile.email || prev.email,
+          phone: profile.phone || prev.phone,
+          address: profile.address || prev.address,
+        }));
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load profile data',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [toast]);
 
   const [preferences, setPreferences] = useState({
     emailNotifications: true,
@@ -41,14 +70,28 @@ export default function StudentProfile() {
     autoSave: true,
   });
 
-  const handleProfileUpdate = () => {
-    toast({
-      title: "Profile Updated",
-      description: "Your profile information has been saved successfully.",
-    });
+  const handleProfileUpdate = async () => {
+    try {
+      await commonApi.profile.update({
+        name: profileData.name,
+        email: profileData.email,
+        phone: profileData.phone,
+        address: profileData.address,
+      });
+      toast({
+        title: "Profile Updated",
+        description: "Your profile information has been saved successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update profile",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handlePasswordChange = () => {
+  const handlePasswordChange = async () => {
     if (profileData.newPassword !== profileData.confirmPassword) {
       toast({
         title: "Password Mismatch",
@@ -58,17 +101,30 @@ export default function StudentProfile() {
       return;
     }
     
-    toast({
-      title: "Password Changed",
-      description: "Your password has been updated successfully.",
-    });
-    
-    setProfileData(prev => ({
-      ...prev,
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    }));
+    try {
+      await commonApi.profile.changePassword({
+        current_password: profileData.currentPassword,
+        password: profileData.newPassword,
+        password_confirmation: profileData.confirmPassword,
+      });
+      toast({
+        title: "Password Changed",
+        description: "Your password has been updated successfully.",
+      });
+      
+      setProfileData(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      }));
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to change password",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePreferencesUpdate = () => {
@@ -170,14 +226,14 @@ export default function StudentProfile() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location">Location</Label>
+                  <Label htmlFor="address">Address</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="location"
+                      id="address"
                       className="pl-10"
-                      value={profileData.location}
-                      onChange={(e) => setProfileData(prev => ({ ...prev, location: e.target.value }))}
+                      value={profileData.address}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, address: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -213,21 +269,16 @@ export default function StudentProfile() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="bio">Bio</Label>
-                <Textarea
-                  id="bio"
-                  placeholder="Tell us about yourself..."
-                  value={profileData.bio}
-                  onChange={(e) => setProfileData(prev => ({ ...prev, bio: e.target.value }))}
-                  className="min-h-[100px]"
-                />
-              </div>
-
-              <Button onClick={handleProfileUpdate}>
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
-              </Button>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <Button onClick={handleProfileUpdate}>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </Button>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

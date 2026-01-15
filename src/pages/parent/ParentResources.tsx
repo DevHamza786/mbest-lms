@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
 import { useParentContext, useParentStore } from '@/lib/store/parentStore';
-import { parentService } from '@/lib/mocks/parent';
+import { commonApi, parentApi } from '@/lib/api';
 import type { ParentResource } from '@/lib/store/parentStore';
 
 export default function ParentResources() {
@@ -51,8 +51,74 @@ export default function ParentResources() {
     const loadResources = async () => {
       try {
         setLoading(true);
-        const resourcesData = await parentService.getResourcesForChild(activeChild.id);
-        setResources(resourcesData);
+        
+        // Get child's classes to fetch class-specific resources
+        const classesData = await parentApi.getChildClasses(Number(activeChild.id));
+        const classIds = classesData.map(c => c.id);
+        
+        if (classIds.length === 0) {
+          setResources([]);
+          return;
+        }
+        
+        // Only fetch resources for child's enrolled classes (no need to fetch ALL resources)
+        // Use Promise.all for parallel fetching with per_page limit for faster loading
+        const classResourcesPromises = classIds.map(classId => 
+          commonApi.resources.list({ class_id: classId, per_page: 50 })
+        );
+        
+        // Fetch resources for all classes in parallel
+        const allClassResources = await Promise.all(classResourcesPromises);
+        const classResources = allClassResources.flat();
+        
+        // Combine and deduplicate resources
+        const uniqueResources = Array.from(
+          new Map(classResources.map(r => [r.id, r])).values()
+        );
+        
+        // Helper function to parse tags
+        const parseTags = (tags: any): string[] => {
+          if (!tags) return [];
+          if (Array.isArray(tags)) return tags;
+          if (typeof tags === 'string') {
+            try {
+              const parsed = JSON.parse(tags);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        };
+
+        // Map API response to store format
+        const mappedResources = uniqueResources.map(r => {
+          // Determine the resource URL - prefer url over file_path
+          let resourceUrl = r.url || '';
+          
+          // If file_path exists but no url, construct from file_path
+          if (!resourceUrl && r.file_path) {
+            // If file_path is already a full path or starts with storage/, use it
+            if (r.file_path.startsWith('/storage/') || r.file_path.startsWith('storage/')) {
+              resourceUrl = r.file_path;
+            } else {
+              // Otherwise, assume it's in storage/resources/
+              resourceUrl = `storage/resources/${r.file_path}`;
+            }
+          }
+          
+          return {
+            id: String(r.id),
+            title: r.title,
+            type: (r.type === 'pdf' ? 'document' : r.type) as 'document' | 'video' | 'recording' | 'link',
+            subject: r.category || 'General',
+            tags: parseTags(r.tags),
+            url: resourceUrl,
+            uploadDate: r.created_at,
+          };
+        });
+        
+        setResources(mappedResources);
       } catch (error) {
         console.error('Failed to load resources:', error);
       } finally {
@@ -65,16 +131,17 @@ export default function ParentResources() {
 
   // Get unique values for filters
   const subjects = [...new Set(resources?.map(r => r.subject) || [])];
-  const allTags = [...new Set(resources?.flatMap(r => r.tags) || [])];
+  const allTags = [...new Set(resources?.flatMap(r => (Array.isArray(r.tags) ? r.tags : [])) || [])];
 
   // Filter resources
   const filteredResources = resources?.filter((resource) => {
+    const tags = Array.isArray(resource.tags) ? resource.tags : [];
     const matchesSearch = resource.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          resource.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         resource.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+                         tags.some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesType = typeFilter === 'all' || resource.type === typeFilter;
     const matchesSubject = subjectFilter === 'all' || resource.subject === subjectFilter;
-    const matchesTag = tagFilter === 'all' || resource.tags.includes(tagFilter);
+    const matchesTag = tagFilter === 'all' || tags.includes(tagFilter);
     return matchesSearch && matchesType && matchesSubject && matchesTag;
   }) || [];
 
@@ -107,12 +174,37 @@ export default function ParentResources() {
   };
 
   const handleResourceClick = (resource: ParentResource) => {
-    // In a real app, this would handle different resource types appropriately
-    if (resource.type === 'link') {
-      window.open(resource.url, '_blank', 'noopener,noreferrer');
-    } else {
-      // For documents, videos, recordings - would typically open in a modal or new tab
-      console.log('Opening resource:', resource.title);
+    try {
+      if (!resource.url) {
+        console.error('Resource URL is missing');
+        return;
+      }
+
+      if (resource.type === 'link') {
+        // For links, open directly (may be http:// or https://)
+        window.open(resource.url, '_blank', 'noopener,noreferrer');
+      } else {
+        // For files (documents, videos, recordings)
+        // Check if URL is already a full URL
+        if (resource.url.startsWith('http://') || resource.url.startsWith('https://')) {
+          // Full URL - open directly
+          window.open(resource.url, '_blank', 'noopener,noreferrer');
+        } else {
+          // Construct the full storage URL
+          // Base URL is typically http://localhost:8000 (without /api/v1)
+          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+          const baseUrl = apiBaseUrl.replace('/api/v1', ''); // Remove /api/v1 to get server root
+          
+          // URL from API should already have /storage/ prefix
+          // If it doesn't start with /, add it
+          const urlPath = resource.url.startsWith('/') ? resource.url : `/${resource.url}`;
+          const fullUrl = `${baseUrl}${urlPath}`;
+          
+          window.open(fullUrl, '_blank', 'noopener,noreferrer');
+        }
+      }
+    } catch (error) {
+      console.error('Error opening resource:', error);
     }
   };
 
@@ -277,13 +369,15 @@ export default function ParentResources() {
                 </CardHeader>
                 
                 <CardContent className="space-y-4">
-                  <div className="flex flex-wrap gap-1">
-                    {resource.tags.map((tag) => (
-                      <Badge key={tag} variant="outline" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
+                  {resource.tags && Array.isArray(resource.tags) && resource.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {resource.tags.map((tag: string) => (
+                        <Badge key={tag} variant="outline" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                   
                   <div className="text-xs text-muted-foreground">
                     Uploaded: {formatDate(resource.uploadDate)}

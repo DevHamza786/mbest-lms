@@ -1,8 +1,15 @@
-import { BarChart3, TrendingUp, Users, BookOpen, DollarSign, Activity } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BarChart3, TrendingUp, Users, BookOpen, DollarSign, Activity, Loader2, Calendar } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { adminApi } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 import {
   BarChart,
   Bar,
@@ -19,28 +26,151 @@ import {
 } from 'recharts';
 
 export default function AdminAnalytics() {
-  const enrollmentData = [
-    { month: 'Jan', students: 45, revenue: 45000 },
-    { month: 'Feb', students: 78, revenue: 78000 },
-    { month: 'Mar', students: 65, revenue: 65000 },
-    { month: 'Apr', students: 89, revenue: 89000 },
-    { month: 'May', students: 94, revenue: 94000 },
-    { month: 'Jun', students: 112, revenue: 112000 },
-  ];
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+  const [dateFrom, setDateFrom] = useState<Date>(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return date;
+  });
+  const [dateTo, setDateTo] = useState<Date>(new Date());
+  const [tempDateFrom, setTempDateFrom] = useState<Date>(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return date;
+  });
+  const [tempDateTo, setTempDateTo] = useState<Date>(new Date());
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [analytics, setAnalytics] = useState<{
+    overview?: {
+      total_students?: number;
+      total_tutors?: number;
+      total_classes?: number;
+      total_invoices?: number;
+    };
+    revenue?: {
+      total_revenue?: string | number;
+      pending_revenue?: string | number;
+      overdue_revenue?: string | number;
+    };
+    sessions?: {
+      total_sessions?: number;
+      completed_sessions?: number;
+      cancelled_sessions?: number;
+    };
+    assignments?: {
+      total_assignments?: number;
+      published_assignments?: number;
+    };
+    enrollment_trends?: Array<{ month: string; students: number; revenue: number }>;
+    course_distribution?: Array<{ name: string; value: number; color: string }>;
+    revenue_trends?: Array<{ month: string; revenue: number }>;
+    top_courses?: Array<{ name: string; students: number; rate: number }>;
+    performance_metrics?: Array<{ metric: string; value: number; target: number }>;
+  }>({});
 
-  const courseData = [
-    { name: 'Computer Science', value: 35, color: 'hsl(var(--primary))' },
-    { name: 'Business', value: 25, color: 'hsl(var(--secondary))' },
-    { name: 'Mathematics', value: 20, color: 'hsl(var(--accent))' },
-    { name: 'Languages', value: 15, color: 'hsl(var(--muted))' },
-    { name: 'Arts', value: 5, color: 'hsl(var(--border))' },
-  ];
+  const loadAnalytics = async (fromDate: Date, toDate: Date) => {
+    try {
+      setIsLoading(true);
+      
+      const params = {
+        date_from: fromDate.toISOString().split('T')[0],
+        date_to: toDate.toISOString().split('T')[0],
+      };
+      
+      const data = await adminApi.getAnalytics(params);
+      setAnalytics(data || {});
+    } catch (error) {
+      console.error('Failed to load analytics:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load analytics data',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const performanceMetrics = [
-    { metric: 'Student Satisfaction', value: 94, target: 90 },
-    { metric: 'Class Completion Rate', value: 87, target: 85 },
-    { metric: 'Tutor Performance', value: 92, target: 88 },
-    { metric: 'Resource Usage', value: 78, target: 80 },
+  useEffect(() => {
+    // Load analytics on initial mount
+    loadAnalytics(dateFrom, dateTo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
+
+  // Sync temporary dates with applied dates when popover opens
+  useEffect(() => {
+    if (isPopoverOpen) {
+      setTempDateFrom(dateFrom);
+      setTempDateTo(dateTo);
+    }
+  }, [isPopoverOpen, dateFrom, dateTo]);
+
+  const handleApplyFilter = () => {
+    // Validate dates
+    if (!tempDateFrom || !tempDateTo) {
+      toast({
+        title: 'Error',
+        description: 'Please select both From Date and To Date',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (tempDateFrom > tempDateTo) {
+      toast({
+        title: 'Error',
+        description: 'From Date cannot be after To Date',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Apply the filter
+    setDateFrom(new Date(tempDateFrom));
+    setDateTo(new Date(tempDateTo));
+    loadAnalytics(new Date(tempDateFrom), new Date(tempDateTo));
+    setIsPopoverOpen(false);
+  };
+
+  // Calculate completion rate from sessions
+  const completionRate = analytics.sessions?.total_sessions 
+    ? Math.round((analytics.sessions.completed_sessions || 0) / analytics.sessions.total_sessions * 100)
+    : 0;
+
+  // Calculate platform usage (published assignments / total assignments)
+  const platformUsage = analytics.assignments?.total_assignments
+    ? Math.round((analytics.assignments.published_assignments || 0) / analytics.assignments.total_assignments * 100)
+    : 0;
+
+  // Use API data for charts
+  const enrollmentData = analytics.enrollment_trends || [];
+  const courseData = analytics.course_distribution || [];
+  const revenueData = analytics.revenue_trends || [];
+  const topCourses = analytics.top_courses || [];
+
+  // Performance metrics from API
+  const performanceMetrics = analytics.performance_metrics || [
+    { 
+      metric: 'Class Completion Rate', 
+      value: completionRate, 
+      target: 85 
+    },
+    { 
+      metric: 'Session Completion', 
+      value: completionRate, 
+      target: 80 
+    },
+    { 
+      metric: 'Assignment Publishing', 
+      value: platformUsage, 
+      target: 90 
+    },
+    { 
+      metric: 'Resource Usage', 
+      value: 0, 
+      target: 80 
+    },
   ];
 
   return (
@@ -52,8 +182,83 @@ export default function AdminAnalytics() {
             Comprehensive insights into platform performance and growth
           </p>
         </div>
-        <div className="flex gap-2">
-          <Badge variant="outline">Last 30 days</Badge>
+        <div className="flex gap-2 items-center">
+          <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
+                <Calendar className="mr-2 h-4 w-4" />
+                {dateFrom && dateTo ? (
+                  <>
+                    {format(dateFrom, 'MMM dd, yyyy')} - {format(dateTo, 'MMM dd, yyyy')}
+                  </>
+                ) : (
+                  <span>Pick a date range</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <div className="p-4 space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">From Date</label>
+                  <CalendarComponent
+                    mode="single"
+                    selected={tempDateFrom}
+                    onSelect={(date) => {
+                      if (date) {
+                        setTempDateFrom(date);
+                      }
+                    }}
+                    disabled={(date) => {
+                      // Disable dates after tempDateTo
+                      return tempDateTo && date > tempDateTo;
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">To Date</label>
+                  <CalendarComponent
+                    mode="single"
+                    selected={tempDateTo}
+                    onSelect={(date) => {
+                      if (date) {
+                        setTempDateTo(date);
+                      }
+                    }}
+                    disabled={(date) => {
+                      // Disable dates before tempDateFrom
+                      return tempDateFrom && date < tempDateFrom;
+                    }}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={() => {
+                      const today = new Date();
+                      const thirtyDaysAgo = new Date();
+                      thirtyDaysAgo.setDate(today.getDate() - 30);
+                      setTempDateFrom(thirtyDaysAgo);
+                      setTempDateTo(today);
+                      // Apply immediately for quick action
+                      setDateFrom(thirtyDaysAgo);
+                      setDateTo(today);
+                      loadAnalytics(thirtyDaysAgo, today);
+                      setIsPopoverOpen(false);
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Last 30 Days
+                  </Button>
+                  <Button 
+                    onClick={handleApplyFilter}
+                    className="flex-1"
+                  >
+                    Apply Filter
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -74,11 +279,25 @@ export default function AdminAnalytics() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">$483,000</div>
-                <p className="text-xs text-muted-foreground">
-                  <TrendingUp className="mr-1 h-3 w-3 inline text-green-500" />
-                  +18% from last month
-                </p>
+                {isLoading ? (
+                  <div className="space-y-2">
+                    <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-40 bg-muted animate-pulse rounded" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">
+                      ${typeof analytics.revenue?.total_revenue === 'string' 
+                        ? parseFloat(analytics.revenue.total_revenue).toLocaleString() 
+                        : (analytics.revenue?.total_revenue || 0).toLocaleString()}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Pending: ${typeof analytics.revenue?.pending_revenue === 'string' 
+                        ? parseFloat(analytics.revenue.pending_revenue).toLocaleString() 
+                        : (analytics.revenue?.pending_revenue || 0).toLocaleString()}
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -88,11 +307,21 @@ export default function AdminAnalytics() {
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">1,247</div>
-                <p className="text-xs text-muted-foreground">
-                  <TrendingUp className="mr-1 h-3 w-3 inline text-green-500" />
-                  +12% from last month
-                </p>
+                {isLoading ? (
+                  <div className="space-y-2">
+                    <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-40 bg-muted animate-pulse rounded" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">
+                      {(analytics.overview?.total_students || 0).toLocaleString()}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Total students in system
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -102,11 +331,19 @@ export default function AdminAnalytics() {
                 <BookOpen className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">87%</div>
-                <p className="text-xs text-muted-foreground">
-                  <TrendingUp className="mr-1 h-3 w-3 inline text-green-500" />
-                  +5% from last month
-                </p>
+                {isLoading ? (
+                  <div className="space-y-2">
+                    <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-40 bg-muted animate-pulse rounded" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">{completionRate}%</div>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics.sessions?.completed_sessions || 0} of {analytics.sessions?.total_sessions || 0} sessions completed
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -116,11 +353,19 @@ export default function AdminAnalytics() {
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">94%</div>
-                <p className="text-xs text-muted-foreground">
-                  <TrendingUp className="mr-1 h-3 w-3 inline text-green-500" />
-                  +2% from last month
-                </p>
+                {isLoading ? (
+                  <div className="space-y-2">
+                    <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-40 bg-muted animate-pulse rounded" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">{platformUsage}%</div>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics.assignments?.published_assignments || 0} of {analytics.assignments?.total_assignments || 0} assignments published
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -133,15 +378,21 @@ export default function AdminAnalytics() {
                 <CardDescription>Monthly student enrollment over time</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={enrollmentData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="students" fill="hsl(var(--primary))" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {isLoading ? (
+                  <div className="h-[300px] flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={enrollmentData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="students" fill="hsl(var(--primary))" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
 
@@ -151,25 +402,31 @@ export default function AdminAnalytics() {
                 <CardDescription>Distribution of students across course categories</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={courseData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {courseData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                {isLoading ? (
+                  <div className="h-[300px] flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={courseData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {courseData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -182,20 +439,26 @@ export default function AdminAnalytics() {
               <CardDescription>Detailed enrollment patterns and trends</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <LineChart data={enrollmentData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line 
-                    type="monotone" 
-                    dataKey="students" 
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {isLoading ? (
+                <div className="h-[400px] flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={enrollmentData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line 
+                      type="monotone" 
+                      dataKey="students" 
+                      stroke="hsl(var(--primary))" 
+                      strokeWidth={2}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -207,15 +470,21 @@ export default function AdminAnalytics() {
               <CardDescription>Monthly revenue trends and projections</CardDescription>
             </CardHeader>
             <CardContent>
+              {isLoading ? (
+                <div className="h-[400px] flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
               <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={enrollmentData}>
+                <BarChart data={revenueData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
-                  <Tooltip formatter={(value) => [`$${value.toLocaleString()}`, 'Revenue']} />
+                  <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Revenue']} />
                   <Bar dataKey="revenue" fill="hsl(var(--primary))" />
                 </BarChart>
               </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -228,23 +497,35 @@ export default function AdminAnalytics() {
                 <CardDescription>Key performance indicators and targets</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {performanceMetrics.map((metric) => (
-                  <div key={metric.metric} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span>{metric.metric}</span>
-                      <span className="font-medium">{metric.value}%</span>
-                    </div>
-                    <Progress value={metric.value} className="h-2" />
-                    <p className="text-xs text-muted-foreground">
-                      Target: {metric.target}% 
-                      {metric.value >= metric.target ? (
-                        <Badge variant="default" className="ml-2">On Track</Badge>
-                      ) : (
-                        <Badge variant="secondary" className="ml-2">Below Target</Badge>
-                      )}
-                    </p>
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="space-y-2">
+                        <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                        <div className="h-2 w-full bg-muted animate-pulse rounded" />
+                        <div className="h-3 w-40 bg-muted animate-pulse rounded" />
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  performanceMetrics.map((metric) => (
+                    <div key={metric.metric} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>{metric.metric}</span>
+                        <span className="font-medium">{metric.value}%</span>
+                      </div>
+                      <Progress value={metric.value} className="h-2" />
+                    <div className="text-xs text-muted-foreground flex items-center gap-2">
+                      <span>Target: {metric.target}%</span>
+                      {metric.value >= metric.target ? (
+                        <Badge variant="default">On Track</Badge>
+                      ) : (
+                        <Badge variant="secondary">Below Target</Badge>
+                      )}
+                    </div>
+                    </div>
+                  ))
+                )}
               </CardContent>
             </Card>
 
@@ -254,21 +535,37 @@ export default function AdminAnalytics() {
                 <CardDescription>Courses with highest completion rates</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {[
-                    { name: 'Advanced Web Development', rate: 95, students: 18 },
-                    { name: 'Data Structures & Algorithms', rate: 92, students: 24 },
-                    { name: 'Digital Marketing Fundamentals', rate: 88, students: 15 },
-                  ].map((course) => (
-                    <div key={course.name} className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{course.name}</p>
-                        <p className="text-sm text-muted-foreground">{course.students} students</p>
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <div className="h-4 w-48 bg-muted animate-pulse rounded" />
+                          <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+                        </div>
+                        <div className="h-6 w-12 bg-muted animate-pulse rounded" />
                       </div>
-                      <Badge variant="default">{course.rate}%</Badge>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : topCourses.length > 0 ? (
+                  <div className="space-y-4">
+                    {topCourses.map((course) => (
+                      <div key={course.name} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{course.name}</p>
+                          <p className="text-sm text-muted-foreground">{course.students} students</p>
+                        </div>
+                        <Badge variant="default">{course.rate}%</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No course performance data available
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -19,11 +19,12 @@ import { useToast } from '@/hooks/use-toast';
 interface AskQuestionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  assignment?: any;
   assignmentTitle?: string;
   className?: string;
 }
 
-export function AskQuestionModal({ isOpen, onClose, assignmentTitle, className }: AskQuestionModalProps) {
+export function AskQuestionModal({ isOpen, onClose, assignment, assignmentTitle, className }: AskQuestionModalProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     subject: '',
@@ -33,6 +34,17 @@ export function AskQuestionModal({ isOpen, onClose, assignmentTitle, className }
     attachments: [] as File[],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Get tutor and class names from assignment
+  const tutorName = assignment?.tutor?.user?.name || 
+                    assignment?.tutor?.name ||
+                    assignment?.classModel?.tutor?.user?.name ||
+                    'Tutor';
+  const classDisplayName = assignment?.classModel?.name || 
+                           assignment?.class_model?.name ||
+                           assignment?.class?.name || 
+                           className || 
+                           'Class';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,27 +57,67 @@ export function AskQuestionModal({ isOpen, onClose, assignmentTitle, className }
       return;
     }
 
+    if (!formData.subject.trim()) {
+      toast({
+        title: "Subject Required",
+        description: "Please enter a subject for your question.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     
-    // Simulate submission
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    toast({
-      title: "Question Submitted",
-      description: "Your question has been sent to your tutor. You'll receive a response soon.",
-    });
-    
-    // Reset form
-    setFormData({
-      subject: '',
-      priority: 'medium',
-      category: 'assignment',
-      question: '',
-      attachments: [],
-    });
-    
-    setIsSubmitting(false);
-    onClose();
+    try {
+      const { studentApi } = await import('@/lib/api');
+      
+      const formDataToSend = new FormData();
+      formDataToSend.append('subject', formData.subject);
+      formDataToSend.append('question', formData.question);
+      formDataToSend.append('priority', formData.priority);
+      formDataToSend.append('category', formData.category);
+      
+      if (assignment?.id) {
+        formDataToSend.append('assignment_id', assignment.id.toString());
+      }
+      if (assignment?.class_id || assignment?.classModel?.id) {
+        formDataToSend.append('class_id', (assignment.class_id || assignment.classModel?.id).toString());
+      }
+      if (assignment?.tutor_id || assignment?.tutor?.id) {
+        formDataToSend.append('tutor_id', (assignment.tutor_id || assignment.tutor?.id).toString());
+      }
+      
+      // Add attachments
+      formData.attachments.forEach((file) => {
+        formDataToSend.append('attachments[]', file);
+      });
+      
+      await studentApi.askQuestion(formDataToSend);
+      
+      toast({
+        title: "Question Submitted",
+        description: `Your question has been sent to ${tutorName}. You'll receive a response soon.`,
+      });
+      
+      // Reset form
+      setFormData({
+        subject: '',
+        priority: 'medium',
+        category: 'assignment',
+        question: '',
+        attachments: [],
+      });
+      
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit question. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,7 +154,8 @@ export function AskQuestionModal({ isOpen, onClose, assignmentTitle, className }
           </DialogTitle>
           <DialogDescription>
             {assignmentTitle ? `Ask about: ${assignmentTitle}` : 'Get help from your tutor'}
-            {className && ` • ${className}`}
+            {classDisplayName && ` • ${classDisplayName}`}
+            {tutorName && ` • ${tutorName}`}
           </DialogDescription>
         </DialogHeader>
         

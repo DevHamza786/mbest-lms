@@ -331,10 +331,10 @@ export default function TutorProfile() {
                   <Input
                     id="calendar-color"
                     type="color"
-                    defaultValue="#1E7838"
+                    defaultValue="#2dd4bf"
                     className="w-20 h-10"
                   />
-                  <span className="text-sm text-muted-foreground">#1E7838</span>
+                  <span className="text-sm text-muted-foreground">#2dd4bf</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   This color will be used to identify your lessons in the calendar

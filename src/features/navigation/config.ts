@@ -94,12 +94,6 @@ export const navByRole: Record<UserRole, NavSection[]> = {
           label: 'Billing',
           description: 'Invoices and payment management'
         },
-        { 
-          href: '/admin/revenue', 
-          icon: Receipt, 
-          label: 'Revenue',
-          description: 'Financial reports and analytics'
-        },
       ]
     },
     {
@@ -158,14 +152,12 @@ export const navByRole: Record<UserRole, NavSection[]> = {
           icon: PenTool, 
           label: 'Assignments',
           description: 'Create and grade assignments',
-          badge: 3
         },
         { 
           href: '/tutor/lesson-requests', 
           icon: Bell, 
           label: 'Lesson Requests',
           description: 'Review incoming requests',
-          badge: 2
         },
       ]
     },
@@ -215,8 +207,7 @@ export const navByRole: Record<UserRole, NavSection[]> = {
         { 
           href: '/tutor/messaging', 
           icon: MessageSquare, 
-          label: 'Messages',
-          badge: 2
+          label: 'Messages'
         },
       ]
     }
@@ -250,6 +241,12 @@ export const navByRole: Record<UserRole, NavSection[]> = {
           description: 'Due and completed work',
           badge: 'Due'
         },
+        {
+          href: '/student/questions', 
+          icon: MessageSquare, 
+          label: 'My Questions',
+          description: 'Questions and answers'
+        },
         { 
           href: '/student/grades', 
           icon: BarChart3, 
@@ -281,8 +278,7 @@ export const navByRole: Record<UserRole, NavSection[]> = {
         { 
           href: '/student/messaging', 
           icon: MessageSquare, 
-          label: 'Messages',
-          badge: 1
+          label: 'Messages'
         },
       ]
     }
@@ -359,8 +355,7 @@ export const navByRole: Record<UserRole, NavSection[]> = {
           href: '/parent/messages', 
           icon: MessageSquare, 
           label: 'Messages',
-          description: 'Communication with tutors',
-          badge: 2
+          description: 'Communication with tutors'
         },
         { 
           href: '/parent/notifications', 

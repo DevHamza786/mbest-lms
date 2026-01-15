@@ -22,6 +22,7 @@ export interface ParentClass {
   name: string;
   tutor: string;
   schedule: string;
+  scheduleData?: any; // Original schedule data for detailed view
   room?: string;
   meetingLink?: string;
   status: 'active' | 'upcoming' | 'completed';

@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
-  GraduationCap, 
   Facebook, 
   Instagram, 
   MessageCircle,
@@ -46,16 +45,16 @@ export function ModernFooter() {
             <div className="space-y-4">
               <Link to="/" className="flex items-center gap-3 group">
                 <motion.div 
-                  className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
-                  whileHover={{ rotate: 360 }}
-                  transition={{ duration: 0.8 }}
+                  className="flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.3 }}
                 >
-                  <GraduationCap className="h-6 w-6 text-white" />
+                  <img 
+                    src="/M.B.E.S.T-logo.png" 
+                    alt="MBEST Logo" 
+                    className="h-12 w-auto object-contain"
+                  />
                 </motion.div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">MBEST</h3>
-                  <p className="text-sm text-muted-foreground">Tutoring Centre</p>
-                </div>
               </Link>
               
               <p className="text-muted-foreground leading-relaxed">

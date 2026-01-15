@@ -13,7 +13,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         <AppSidebar />
         <div className="flex flex-1 flex-col">
           <Header />
-          <main className="flex-1 overflow-auto bg-[#faffdf] dark:bg-background">
+          <main className="flex-1 overflow-auto bg-background">
             {children}
           </main>
         </div>

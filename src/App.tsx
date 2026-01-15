@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -38,6 +38,7 @@ import AdminCalendar from "./pages/admin/AdminCalendar";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentClasses from "./pages/student/StudentClasses";
 import StudentAssignments from "./pages/student/StudentAssignments";
+import StudentQuestions from "./pages/student/StudentQuestions";
 import StudentGrades from "./pages/student/StudentGrades";
 import StudentResources from "./pages/student/StudentResources";
 import StudentMessaging from "./pages/student/StudentMessaging";
@@ -48,6 +49,7 @@ import TutorDashboard from "./pages/tutor/TutorDashboard";
 import TutorClasses from "./pages/tutor/TutorClasses";
 import TutorStudents from "./pages/tutor/TutorStudents";
 import TutorAssignments from "./pages/tutor/TutorAssignments";
+import TutorAssignmentDetail from "./pages/tutor/TutorAssignmentDetail";
 import TutorResources from "./pages/tutor/TutorResources";
 import TutorMessaging from "./pages/tutor/TutorMessaging";
 import TutorAttendance from "./pages/tutor/TutorAttendance";
@@ -97,8 +99,8 @@ const App = () => (
             <Route path="/resources" element={<Resources />} />
             <Route path="/contact" element={<Contact />} />
             
-            {/* Portal Access */}
-            <Route path="/portal" element={<Index />} />
+            {/* Portal Access - Redirect to Sign Up */}
+            <Route path="/portal" element={<Navigate to="/auth/signup" replace />} />
             
             {/* Auth Routes */}
             <Route path="/auth/signin" element={<SignIn />} />
@@ -183,6 +185,11 @@ const App = () => (
                         <StudentAssignments />
                       </ProtectedRoute>
                     } />
+                    <Route path="questions" element={
+                      <ProtectedRoute allowedRoles={['student']}>
+                        <StudentQuestions />
+                      </ProtectedRoute>
+                    } />
                     <Route path="grades" element={
                       <ProtectedRoute allowedRoles={['student']}>
                         <StudentGrades />
@@ -250,6 +257,11 @@ const App = () => (
                     <Route path="assignments" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
                         <TutorAssignments />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="assignments/:id" element={
+                      <ProtectedRoute allowedRoles={['tutor']}>
+                        <TutorAssignmentDetail />
                       </ProtectedRoute>
                     } />
                     <Route path="lesson-requests" element={

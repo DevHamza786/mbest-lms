@@ -1,56 +1,148 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Clock, Plus, Trash2, Save } from "lucide-react";
+import { Clock, Plus, Trash2, Save, Loader2 } from "lucide-react";
+import { tutorApi, TutorAvailability as TutorAvailabilityType } from '@/lib/api';
+import { format } from 'date-fns';
 
 interface TimeSlot {
-  id: string;
+  id: string | number;
   day: string;
   startTime: string;
   endTime: string;
+  isAvailable?: boolean;
 }
 
 export default function TutorAvailability() {
   const { toast } = useToast();
-  const [lastUpdated] = useState('30/07/2025 09:20 AM');
-
-  const [availability, setAvailability] = useState<TimeSlot[]>([
-    { id: '1', day: 'Friday', startTime: '16:00', endTime: '20:00' },
-    { id: '2', day: 'Saturday', startTime: '09:00', endTime: '16:00' },
-    { id: '3', day: 'Sunday', startTime: '14:00', endTime: '17:00' },
-  ]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [availability, setAvailability] = useState<TimeSlot[]>([]);
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+  // Load availability on mount
+  useEffect(() => {
+    loadAvailability();
+  }, []);
+
+  const loadAvailability = async () => {
+    try {
+      setIsLoading(true);
+      const data = await tutorApi.getAvailability();
+      
+      // Map API response to component's TimeSlot format
+      const mappedSlots: TimeSlot[] = data.map((slot: TutorAvailabilityType) => {
+        // Convert time from "HH:MM:SS" to "HH:MM" format for HTML time inputs
+        const formatTimeForInput = (time: string) => {
+          if (!time) return '09:00';
+          // If time is in "HH:MM:SS" format, extract just "HH:MM"
+          return time.substring(0, 5);
+        };
+
+        return {
+          id: slot.id,
+          day: slot.day_of_week,
+          startTime: formatTimeForInput(slot.start_time),
+          endTime: formatTimeForInput(slot.end_time),
+          isAvailable: slot.is_available ?? true,
+        };
+      });
+
+      setAvailability(mappedSlots);
+    } catch (error) {
+      console.error('Failed to load availability:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load availability. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const addTimeSlot = (day: string) => {
     const newSlot: TimeSlot = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: `temp-${Date.now()}`, // Temporary ID for new slots
       day,
       startTime: '09:00',
       endTime: '17:00',
+      isAvailable: true,
     };
     setAvailability([...availability, newSlot]);
   };
 
-  const removeTimeSlot = (id: string) => {
-    setAvailability(availability.filter(slot => slot.id !== id));
+  const removeTimeSlot = async (id: string | number) => {
+    // If it's a real ID (number), delete from API
+    if (typeof id === 'number') {
+      try {
+        await tutorApi.deleteAvailability(id);
+        setAvailability(availability.filter(slot => slot.id !== id));
+        toast({
+          title: "Time Slot Removed",
+          description: "Availability slot has been removed successfully.",
+        });
+      } catch (error) {
+        console.error('Failed to delete availability:', error);
+        toast({
+          title: "Error",
+          description: "Failed to remove time slot. Please try again.",
+          variant: 'destructive',
+        });
+      }
+    } else {
+      // If it's a temporary ID, just remove from local state
+      setAvailability(availability.filter(slot => slot.id !== id));
+    }
   };
 
-  const updateTimeSlot = (id: string, field: 'startTime' | 'endTime', value: string) => {
+  const updateTimeSlot = (id: string | number, field: 'startTime' | 'endTime', value: string) => {
     setAvailability(availability.map(slot => 
       slot.id === id ? { ...slot, [field]: value } : slot
     ));
   };
 
-  const handleSave = () => {
-    toast({
-      title: "Availability Updated",
-      description: "Your availability schedule has been saved successfully.",
-    });
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      
+      // Group slots by day and prepare data for API
+      const availabilityData = availability.map(slot => ({
+        day_of_week: slot.day,
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+        is_available: slot.isAvailable ?? true,
+      }));
+
+      // The API expects array of availability objects
+      await tutorApi.setAvailability(availabilityData);
+      
+      // Reload availability to get updated data
+      await loadAvailability();
+      
+      // Update last updated timestamp
+      setLastUpdated(format(new Date(), 'dd/MM/yyyy hh:mm a'));
+      
+      toast({
+        title: "Availability Updated",
+        description: "Your availability schedule has been saved successfully.",
+      });
+    } catch (error: any) {
+      console.error('Failed to save availability:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save availability. Please try again.",
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const formatTime = (time: string) => {
@@ -70,9 +162,18 @@ export default function TutorAvailability() {
             Manage your weekly teaching availability
           </p>
         </div>
-        <Button onClick={handleSave}>
-          <Save className="mr-2 h-4 w-4" />
-          Save Changes
+        <Button onClick={handleSave} disabled={isSaving}>
+          {isSaving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save Changes
+            </>
+          )}
         </Button>
       </div>
 
@@ -82,17 +183,22 @@ export default function TutorAvailability() {
             <div>
               <CardTitle>Weekly Schedule</CardTitle>
               <CardDescription>
-                Last updated: {lastUpdated} • Times in Sydney timezone
+                {lastUpdated ? `Last updated: ${lastUpdated} • ` : ''}Times in Sydney timezone
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
-            {daysOfWeek.map(day => {
-              const daySlots = availability.filter(slot => slot.day === day);
-              
-              return (
+          {isLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {daysOfWeek.map(day => {
+                const daySlots = availability.filter(slot => slot.day === day);
+                
+                return (
                 <div key={day} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium text-sm">{day}</h3>
@@ -152,35 +258,11 @@ export default function TutorAvailability() {
                       ))}
                     </div>
                   )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Calendar Integration</CardTitle>
-          <CardDescription>
-            Sync your availability with external calendar applications
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Calendar Feed URL</Label>
-            <div className="flex gap-2">
-              <Input 
-                value="https://mbest-tutoring.com/calendar/feed/tutor-123" 
-                readOnly 
-                className="font-mono text-sm"
-              />
-              <Button variant="outline">Copy</Button>
+                  </div>
+                );
+              })}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Use this URL to subscribe to your calendar in Google Calendar, Outlook, or other calendar apps
-            </p>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

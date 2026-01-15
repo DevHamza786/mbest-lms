@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
 import { useParentContext, useParentStore } from '@/lib/store/parentStore';
-import { parentService } from '@/lib/mocks/parent';
+import { commonApi } from '@/lib/api';
 import type { ParentNotification } from '@/lib/store/parentStore';
 
 export default function ParentNotifications() {
@@ -50,8 +50,43 @@ export default function ParentNotifications() {
     const loadNotifications = async () => {
       try {
         setLoading(true);
-        const notificationsData = await parentService.getNotifications();
-        setNotifications(notificationsData);
+        const notificationsData = await commonApi.notifications.list();
+        
+        // Map API response to store format
+        const mappedNotifications = notificationsData.map(n => {
+          // Determine type and priority from notification data
+          let type: 'payment' | 'class' | 'grade' | 'assignment' | 'general' = 'general';
+          let priority: 'low' | 'medium' | 'high' = 'medium';
+          
+          // Try to infer type from title/message
+          const lowerTitle = n.title.toLowerCase();
+          const lowerMessage = n.message.toLowerCase();
+          if (lowerTitle.includes('payment') || lowerMessage.includes('payment') || lowerMessage.includes('invoice')) {
+            type = 'payment';
+            priority = 'high';
+          } else if (lowerTitle.includes('grade') || lowerMessage.includes('grade')) {
+            type = 'grade';
+            priority = 'medium';
+          } else if (lowerTitle.includes('assignment') || lowerMessage.includes('assignment')) {
+            type = 'assignment';
+            priority = 'high';
+          } else if (lowerTitle.includes('class') || lowerMessage.includes('class')) {
+            type = 'class';
+            priority = 'medium';
+          }
+          
+          return {
+            id: String(n.id),
+            title: n.title,
+            message: n.message,
+            type,
+            timestamp: n.created_at,
+            isRead: n.is_read,
+            priority,
+          };
+        });
+        
+        setNotifications(mappedNotifications);
       } catch (error) {
         console.error('Failed to load notifications:', error);
       } finally {
@@ -126,17 +161,27 @@ export default function ParentNotifications() {
     }
   };
 
-  const handleNotificationClick = (notification: ParentNotification) => {
+  const handleNotificationClick = async (notification: ParentNotification) => {
     if (!notification.isRead) {
-      markNotificationAsRead(notification.id);
+      try {
+        await commonApi.notifications.markAsRead(Number(notification.id));
+        markNotificationAsRead(notification.id);
+      } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+      }
     }
   };
 
-  const markAllAsRead = () => {
-    const unreadNotifications = notifications?.filter(n => !n.isRead) || [];
-    unreadNotifications.forEach(notification => {
-      markNotificationAsRead(notification.id);
-    });
+  const markAllAsRead = async () => {
+    try {
+      await commonApi.notifications.markAllAsRead();
+      const unreadNotifications = notifications?.filter(n => !n.isRead) || [];
+      unreadNotifications.forEach(notification => {
+        markNotificationAsRead(notification.id);
+      });
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+    }
   };
 
   const unreadCount = notifications?.filter(n => !n.isRead).length || 0;

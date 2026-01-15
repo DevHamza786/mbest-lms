@@ -63,22 +63,26 @@ export function InvoicePreviewModal({ open, onOpenChange, lesson, onGenerate, vi
       const lessonDate = new Date(lesson.date);
       const invoiceNumber = `TINV-${Date.now().toString().slice(-4)}`;
       
+      // Calculate hourly rate and total amount
+      const hourlyRate = lesson.wage ? lesson.wage / lesson.duration : 30; // Default $30/hour if no wage
+      const totalAmount = hourlyRate * lesson.duration;
+
       const defaultData: InvoiceData = {
         lessonId: lesson.id,
         invoiceNumber,
         date: format(new Date(), 'yyyy-MM-dd'),
         periodStart: format(lessonDate, 'yyyy-MM-dd'),
         periodEnd: format(lessonDate, 'yyyy-MM-dd'),
-        tutorName: lesson.tutorName || 'Vu Dinh',
-        tutorAddress: 'Vo One\n16 Tonnyeen St Wetherill Park\nSydney NSW 2164\nAustralia',
+        tutorName: lesson.tutorName || 'Tutor',
+        tutorAddress: lesson.tutorName ? `${lesson.tutorName}\n` : '', // Start with tutor name, user can add address
         students: lesson.studentNames,
         items: [{
-          description: `${lesson.lessonTitle || 'Lesson'} - ${lesson.studentNames.join(', ')}`,
+          description: `${lesson.subject || lesson.lessonTitle || 'Lesson'} - ${lesson.studentNames.join(', ')}`,
           quantity: lesson.duration,
-          rate: (lesson.wage || 45) / lesson.duration / lesson.studentNames.length,
-          amount: lesson.wage || 45 * lesson.studentNames.length,
+          rate: hourlyRate,
+          amount: totalAmount,
         }],
-        totalAmount: lesson.wage || 45 * lesson.studentNames.length,
+        totalAmount: totalAmount,
         notes: '',
       };
       
@@ -90,11 +94,27 @@ export function InvoicePreviewModal({ open, onOpenChange, lesson, onGenerate, vi
   const handleGenerate = () => {
     if (!invoiceData) return;
     
+    // Validate required fields
+    if (!invoiceData.tutorAddress.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter your tutor address.",
+        variant: "destructive",
+      });
+      setIsEditing(true); // Switch to edit mode to show the address field
+      return;
+    }
+
+    if (invoiceData.items.length === 0 || invoiceData.items.some(item => !item.description.trim() || item.amount <= 0)) {
+      toast({
+        title: "Validation Error",
+        description: "Please ensure all invoice items have valid descriptions and amounts.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     onGenerate(invoiceData);
-    toast({
-      title: "Invoice Generated",
-      description: "Invoice has been generated and will be visible to admin only.",
-    });
     onOpenChange(false);
   };
 
@@ -170,17 +190,18 @@ export function InvoicePreviewModal({ open, onOpenChange, lesson, onGenerate, vi
 
           {/* Tutor Address */}
           <div>
-            <Label>Tutor Address</Label>
+            <Label>Tutor Address {!isEditing && !invoiceData.tutorAddress.trim() && <span className="text-destructive">*</span>}</Label>
             {isEditing ? (
               <Textarea
                 value={invoiceData.tutorAddress}
                 onChange={(e) => setInvoiceData({ ...invoiceData, tutorAddress: e.target.value })}
                 rows={4}
                 className="mt-2"
+                placeholder="Enter your full address&#10;Street Address&#10;City, State, Postcode&#10;Country"
               />
             ) : (
-              <div className="mt-2 p-3 bg-muted rounded-lg whitespace-pre-line">
-                {invoiceData.tutorAddress}
+              <div className="mt-2 p-3 bg-muted rounded-lg whitespace-pre-line min-h-[80px]">
+                {invoiceData.tutorAddress || <span className="text-muted-foreground italic">Address not provided. Click Edit to add your address.</span>}
               </div>
             )}
           </div>

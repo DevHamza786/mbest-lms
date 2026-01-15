@@ -142,17 +142,6 @@ export function SignInForm() {
             Sign up
           </Link>
         </div>
-
-        {/* Demo Credentials */}
-        <div className="mt-6 space-y-2 rounded-lg border bg-muted/50 p-4">
-          <h4 className="text-sm font-medium">Demo Credentials:</h4>
-          <div className="space-y-1 text-xs text-muted-foreground">
-            <p><strong>Admin:</strong> admin@demo.app / Admin@123</p>
-            <p><strong>Tutor:</strong> tutor@demo.app / Tutor@123</p>
-            <p><strong>Student:</strong> student@demo.app / Student@123</p>
-            <p><strong>Parent:</strong> parent@demo.app / Parent@123</p>
-          </div>
-        </div>
       </CardContent>
     </Card>
   );

@@ -90,15 +90,17 @@ export function formatTimeDisplay(time: string): string {
 // Get color for session based on criteria
 export function getSessionColor(session: Session): string {
   // Color by status first
-  if (session.status === 'cancelled') return 'hsl(var(--muted))';
-  if (session.status === 'no-show') return 'hsl(var(--destructive))';
-  if (session.status === 'completed') return 'hsl(var(--success))';
+  if (session.status === 'planned') return 'hsl(221, 83%, 53%)'; // blue (primary color)
+  if (session.status === 'cancelled') return 'hsl(var(--destructive))'; // red
+  if (session.status === 'no-show') return 'hsl(var(--destructive))'; // red
+  if (session.status === 'completed') return 'hsl(var(--success))'; // green
+  if (session.status === 'rescheduled') return 'hsl(25, 95%, 53%)'; // orange
   
   // Otherwise color by teacher (generate from teacher ID)
   const colors = [
-    'hsl(221, 83%, 53%)', // primary
-    'hsl(25, 95%, 53%)', // secondary
-    'hsl(142, 76%, 36%)', // success
+    'hsl(221, 83%, 53%)', // primary (blue)
+    'hsl(25, 95%, 53%)', // secondary (orange)
+    'hsl(142, 76%, 36%)', // success (green)
     'hsl(271, 76%, 53%)', // purple
     'hsl(199, 89%, 48%)', // cyan
     'hsl(346, 77%, 50%)', // pink

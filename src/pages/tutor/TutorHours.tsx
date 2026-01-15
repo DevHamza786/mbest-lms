@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +10,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Clock, DollarSign, FileText, Download, Plus, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Clock, DollarSign, FileText, Download, Plus, CheckCircle2, XCircle, AlertCircle, Loader2 } from "lucide-react";
 import { generateTutorInvoicePDF } from '@/lib/utils/invoicePdf';
+import { tutorApi } from '@/lib/api';
+import { format } from 'date-fns';
 
 interface LessonHour {
   id: string;
@@ -41,31 +43,118 @@ export default function TutorHours() {
   const { toast } = useToast();
   const [isAddEntryOpen, setIsAddEntryOpen] = useState(false);
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const [lessonHours, setLessonHours] = useState<LessonHour[]>([]);
+  const [invoices, setInvoices] = useState<TutorInvoice[]>([]);
+  const [summary, setSummary] = useState({
+    total_hours: 0,
+    total_earnings: 0,
+    pending_hours: 0,
+    pending_earnings: 0,
+  });
 
-  const [lessonHours] = useState<LessonHour[]>([
-    { id: '1', date: '01/11/2025', title: 'Alcatraz', students: ['Xavier Dean'], status: 'Attended', start: '01:00 PM', end: '02:30 PM', hours: 1.5, earnings: 67.50, paid: true, isGroupClass: false },
-    { id: '2', date: '05/11/2025', title: 'WWW.P', students: ['Sampaguita Anoa'], status: 'Attended', start: '04:00 PM', end: '05:00 PM', hours: 1.0, earnings: 40.00, paid: true, isGroupClass: false },
-    { id: '3', date: '05/11/2025', title: 'WWW.P', students: ['Rostov Percy'], status: 'Attended', start: '07:30 PM', end: '08:30 PM', hours: 1.0, earnings: 40.00, paid: true, isGroupClass: false },
-    { id: '4', date: '07/11/2025', title: 'Other', students: ['Xavier Dean'], status: 'Attended', start: '04:30 PM', end: '05:30 PM', hours: 1.0, earnings: 40.00, paid: true, isGroupClass: false },
-    { id: '5', date: '06/11/2025', title: 'Alcatraz', students: ['Sampaguita Anoa', 'Ethan Sutton'], status: 'Attended', start: '07:30 PM', end: '08:30 PM', hours: 1.0, earnings: 40.00, paid: true, isGroupClass: true },
-    { id: '6', date: '10/11/2025', title: 'WWW.P', students: ['Sampaguita Anoa', 'Sophia Song'], status: 'Attended', start: '07:30 PM', end: '08:30 PM', hours: 1.0, earnings: 40.00, paid: true, isGroupClass: true },
-  ]);
+  const [newInvoice, setNewInvoice] = useState({
+    session_id: '',
+    period_start: '',
+    period_end: '',
+    issue_date: format(new Date(), 'yyyy-MM-dd'),
+    tutor_address: '',
+    notes: '',
+  });
 
-  const [invoices] = useState<TutorInvoice[]>([
-    { id: '1', invoiceNumber: 'TINV-0016', date: '01/11/2025', periodStart: '27/10/2025', periodEnd: '01/11/2025', status: 'Paid', amount: 430.00 },
-    { id: '2', invoiceNumber: 'TINV-0015', date: '20/10/2025', periodStart: '20/10/2025', periodEnd: '26/10/2025', status: 'Paid', amount: 315.00 },
-    { id: '3', invoiceNumber: 'TINV-0014', date: '19/10/2025', periodStart: '13/10/2025', periodEnd: '19/10/2025', status: 'Paid', amount: 180.00 },
-    { id: '4', invoiceNumber: 'TINV-0013', date: '11/10/2025', periodStart: '30/09/2025', periodEnd: '13/10/2025', status: 'Paid', amount: 202.50 },
-  ]);
+  // Load hours and invoices on mount
+  useEffect(() => {
+    loadHours();
+    loadInvoices();
+  }, []);
 
-  const totalHours = lessonHours.reduce((sum, entry) => sum + entry.hours, 0);
-  const totalEarnings = lessonHours.reduce((sum, entry) => sum + entry.earnings, 0);
-  const unpaidEarnings = lessonHours.filter(entry => !entry.paid).reduce((sum, entry) => sum + entry.earnings, 0);
+  const loadHours = async () => {
+    try {
+      setIsLoading(true);
+      const response = await tutorApi.getHoursWorked();
+      
+      // Response structure: { success: true, data: paginated_sessions, summary: {...} }
+      // paginated_sessions = { data: [...sessions], current_page, last_page, ... }
+      const paginatedData = response.data || {};
+      const sessions = Array.isArray(paginatedData) ? paginatedData : (paginatedData.data || []);
+      const summaryData = response.summary || {};
+      
+      // Map sessions to LessonHour format
+      const mappedHours: LessonHour[] = sessions.map((session: any) => ({
+        id: String(session.id),
+        date: format(new Date(session.date), 'dd/MM/yyyy'),
+        title: session.subject || 'Session',
+        students: session.students?.map((s: any) => s.user?.name || 'Student') || [],
+        status: session.status === 'completed' ? 'Attended' : session.status === 'cancelled' ? 'Tutor Cancelled' : 'Student Cancelled',
+        start: format(new Date(`2000-01-01T${session.start_time}`), 'hh:mm a'),
+        end: format(new Date(`2000-01-01T${session.end_time}`), 'hh:mm a'),
+        hours: session.hours || 0,
+        earnings: session.earnings || 0,
+        paid: session.paid || false,
+        isGroupClass: (session.students?.length || 0) > 1,
+      }));
+
+      setLessonHours(mappedHours);
+      setSummary({
+        total_hours: summaryData.total_hours || 0,
+        total_earnings: summaryData.total_earnings || 0,
+        pending_hours: summaryData.pending_hours || 0,
+        pending_earnings: summaryData.pending_earnings || 0,
+      });
+    } catch (error) {
+      console.error('Failed to load hours:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load hours data. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadInvoices = async () => {
+    try {
+      setIsLoadingInvoices(true);
+      const response = await tutorApi.getInvoices();
+      // Response structure: { success: true, data: paginated_invoices }
+      // paginated_invoices = { data: [...invoices], current_page, last_page, ... }
+      const paginatedData = response.data || {};
+      const invoicesData = Array.isArray(paginatedData) ? paginatedData : (paginatedData.data || []);
+      
+      const mappedInvoices: TutorInvoice[] = invoicesData.map((invoice: any) => ({
+        id: String(invoice.id),
+        invoiceNumber: invoice.invoice_number || `INV-${invoice.id}`,
+        date: format(new Date(invoice.issue_date), 'dd/MM/yyyy'),
+        periodStart: format(new Date(invoice.period_start), 'dd/MM/yyyy'),
+        periodEnd: format(new Date(invoice.period_end), 'dd/MM/yyyy'),
+        status: invoice.status === 'paid' ? 'Paid' : invoice.status === 'pending' ? 'Pending' : 'Overdue',
+        amount: parseFloat(invoice.amount || 0),
+      }));
+
+      setInvoices(mappedInvoices);
+    } catch (error) {
+      console.error('Failed to load invoices:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load invoices. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingInvoices(false);
+    }
+  };
+
+  const totalHours = summary.total_hours || 0;
+  const totalEarnings = summary.total_earnings || 0;
+  const unpaidEarnings = summary.pending_earnings || 0;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Attended':
-        return <Badge className="bg-green-500/10 text-green-700 dark:text-green-400"><CheckCircle2 className="mr-1 h-3 w-3" />Attended</Badge>;
+        return <Badge className="bg-secondary/10 text-secondary dark:text-secondary-light"><CheckCircle2 className="mr-1 h-3 w-3" />Attended</Badge>;
       case 'Student Cancelled':
         return <Badge className="bg-red-500/10 text-red-700 dark:text-red-400"><XCircle className="mr-1 h-3 w-3" />Cancelled</Badge>;
       case 'Tutor Cancelled':
@@ -95,17 +184,82 @@ export default function TutorHours() {
     });
   };
 
-  const handleCreateInvoice = () => {
-    toast({
-      title: "Invoice Created",
-      description: "Your invoice has been generated successfully.",
-    });
-    setIsCreateInvoiceOpen(false);
+  const handleCreateInvoice = async () => {
+    if (!newInvoice.session_id || !newInvoice.period_start || !newInvoice.period_end || !newInvoice.tutor_address) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsCreatingInvoice(true);
+      
+      // Find the session to get details
+      const session = lessonHours.find(h => h.id === newInvoice.session_id);
+      if (!session) {
+        toast({
+          title: "Error",
+          description: "Session not found.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const invoiceNumber = `TINV-${Date.now().toString().slice(-6)}`;
+      
+      await tutorApi.createInvoice({
+        session_id: parseInt(newInvoice.session_id),
+        invoice_number: invoiceNumber,
+        issue_date: newInvoice.issue_date,
+        period_start: newInvoice.period_start,
+        period_end: newInvoice.period_end,
+        tutor_address: newInvoice.tutor_address,
+        items: [{
+          description: `${session.title} - ${session.students.join(', ')}`,
+          quantity: session.hours,
+          rate: session.earnings / session.hours,
+          amount: session.earnings,
+        }],
+        total_amount: session.earnings,
+        notes: newInvoice.notes || undefined,
+      });
+
+      toast({
+        title: "Invoice Created",
+        description: "Your invoice has been generated successfully.",
+      });
+
+      // Reset form
+      setNewInvoice({
+        session_id: '',
+        period_start: '',
+        period_end: '',
+        issue_date: format(new Date(), 'yyyy-MM-dd'),
+        tutor_address: '',
+        notes: '',
+      });
+      setIsCreateInvoiceOpen(false);
+      
+      // Reload invoices
+      await loadInvoices();
+    } catch (error) {
+      console.error('Failed to create invoice:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create invoice. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingInvoice(false);
+    }
   };
 
-  const handleDownloadInvoice = (invoice: TutorInvoice) => {
+  const handleDownloadInvoice = async (invoice: TutorInvoice) => {
     try {
-      generateTutorInvoicePDF({
+      await generateTutorInvoicePDF({
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         date: invoice.date,
@@ -154,8 +308,14 @@ export default function TutorHours() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalHours.toFixed(1)}h</div>
-            <p className="text-xs text-muted-foreground">This period</p>
+            {isLoading ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{totalHours.toFixed(1)}h</div>
+                <p className="text-xs text-muted-foreground">This period</p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -164,8 +324,14 @@ export default function TutorHours() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalEarnings.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Gross income</p>
+            {isLoading ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">${totalEarnings.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">Gross income</p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -174,8 +340,14 @@ export default function TutorHours() {
             <AlertCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${unpaidEarnings.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Awaiting payment</p>
+            {isLoading ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">${unpaidEarnings.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">Awaiting payment</p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -200,22 +372,28 @@ export default function TutorHours() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Who</TableHead>
-                    <TableHead>What</TableHead>
-                    <TableHead>Start</TableHead>
-                    <TableHead>End</TableHead>
-                    <TableHead className="text-right">Hours</TableHead>
-                    <TableHead className="text-right">Earnings</TableHead>
-                    <TableHead>Paid</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lessonHours.map((entry) => (
+              {isLoading ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Who</TableHead>
+                      <TableHead>What</TableHead>
+                      <TableHead>Start</TableHead>
+                      <TableHead>End</TableHead>
+                      <TableHead className="text-right">Hours</TableHead>
+                      <TableHead className="text-right">Earnings</TableHead>
+                      <TableHead>Paid</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lessonHours.length > 0 ? (
+                      lessonHours.map((entry) => (
                     <TableRow key={entry.id}>
                       <TableCell>{entry.date}</TableCell>
                       <TableCell className="font-medium">
@@ -245,9 +423,9 @@ export default function TutorHours() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
+                          onClick={async () => {
                             // Generate invoice for this lesson hour entry
-                            generateTutorInvoicePDF({
+                            await generateTutorInvoicePDF({
                               id: entry.id,
                               invoiceNumber: `TINV-${Date.now().toString().slice(-6)}`,
                               date: entry.date,
@@ -276,17 +454,27 @@ export default function TutorHours() {
                           <span className="hidden sm:inline">Download</span>
                         </Button>
                       </TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="font-bold bg-muted/50">
-                    <TableCell colSpan={6}>Totals</TableCell>
-                    <TableCell className="text-right">{totalHours.toFixed(1)}</TableCell>
-                    <TableCell className="text-right">${totalEarnings.toFixed(2)}</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+                      </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                          No lesson hours recorded for this period
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {lessonHours.length > 0 && (
+                      <TableRow className="font-bold bg-muted/50">
+                        <TableCell colSpan={6}>Totals</TableCell>
+                        <TableCell className="text-right">{totalHours.toFixed(1)}</TableCell>
+                        <TableCell className="text-right">${totalEarnings.toFixed(2)}</TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -349,41 +537,104 @@ export default function TutorHours() {
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor="period-start">Period Start</Label>
-                        <Input id="period-start" type="date" />
+                        <Label htmlFor="session_id">Session *</Label>
+                        <Select value={newInvoice.session_id} onValueChange={(value) => setNewInvoice(prev => ({ ...prev, session_id: value }))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a session" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {lessonHours.map((hour) => (
+                              <SelectItem key={hour.id} value={hour.id}>
+                                {hour.date} - {hour.title} ({hour.students.join(', ')})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div>
-                        <Label htmlFor="period-end">Period End</Label>
-                        <Input id="period-end" type="date" />
+                        <Label htmlFor="issue_date">Issue Date *</Label>
+                        <Input 
+                          id="issue_date" 
+                          type="date" 
+                          value={newInvoice.issue_date}
+                          onChange={(e) => setNewInvoice(prev => ({ ...prev, issue_date: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="period-start">Period Start *</Label>
+                        <Input 
+                          id="period-start" 
+                          type="date" 
+                          value={newInvoice.period_start}
+                          onChange={(e) => setNewInvoice(prev => ({ ...prev, period_start: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="period-end">Period End *</Label>
+                        <Input 
+                          id="period-end" 
+                          type="date" 
+                          value={newInvoice.period_end}
+                          onChange={(e) => setNewInvoice(prev => ({ ...prev, period_end: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="tutor_address">Tutor Address *</Label>
+                        <Textarea 
+                          id="tutor_address" 
+                          placeholder="Enter your address..."
+                          value={newInvoice.tutor_address}
+                          onChange={(e) => setNewInvoice(prev => ({ ...prev, tutor_address: e.target.value }))}
+                        />
                       </div>
                       <div>
                         <Label htmlFor="notes">Notes (Optional)</Label>
-                        <Textarea id="notes" placeholder="Add any additional notes..." />
+                        <Textarea 
+                          id="notes" 
+                          placeholder="Add any additional notes..."
+                          value={newInvoice.notes}
+                          onChange={(e) => setNewInvoice(prev => ({ ...prev, notes: e.target.value }))}
+                        />
                       </div>
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setIsCreateInvoiceOpen(false)}>Cancel</Button>
-                      <Button onClick={handleCreateInvoice}>Create Invoice</Button>
+                      <Button onClick={handleCreateInvoice} disabled={isCreatingInvoice}>
+                        {isCreatingInvoice ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          'Create Invoice'
+                        )}
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Invoice Number</TableHead>
-                    <TableHead>Period Start</TableHead>
-                    <TableHead>Period End</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoices.map((invoice) => (
+              {isLoadingInvoices ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Invoice Number</TableHead>
+                      <TableHead>Period Start</TableHead>
+                      <TableHead>Period End</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {invoices.length > 0 ? (
+                      invoices.map((invoice) => (
                     <TableRow key={invoice.id}>
                       <TableCell>{invoice.date}</TableCell>
                       <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
@@ -403,10 +654,18 @@ export default function TutorHours() {
                           <span className="hidden sm:inline">Download</span>
                         </Button>
                       </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          No invoices found
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

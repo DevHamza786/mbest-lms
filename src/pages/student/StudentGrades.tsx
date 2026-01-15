@@ -3,91 +3,68 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, TrendingUp, Award, Calendar } from "lucide-react";
+import { BarChart3, TrendingUp, Award, Calendar, Loader2 } from "lucide-react";
 import { GradeDetailsModal } from '@/components/modals/GradeDetailsModal';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { studentApi } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 const StudentGrades = () => {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+  const [grades, setGrades] = useState<any[]>([]);
+  const [overallAverage, setOverallAverage] = useState(0);
   const [detailsModal, setDetailsModal] = useState<{ isOpen: boolean; subject: any }>({
     isOpen: false,
     subject: null,
   });
-  const overallStats = {
-    gpa: 3.4,
-    overallGrade: 87,
-    completedAssignments: 15,
-    totalAssignments: 18,
-    classRank: 8,
-    totalStudents: 32
+
+  useEffect(() => {
+    const loadGrades = async () => {
+      try {
+        setIsLoading(true);
+        const response = await studentApi.getGrades({ per_page: 100 });
+        // The API returns { data: [...], overall_average: ..., pagination: {...} }
+        if (response && response.data) {
+          setGrades(Array.isArray(response.data) ? response.data : []);
+          setOverallAverage(response.overall_average || 0);
+        } else {
+          setGrades([]);
+          setOverallAverage(0);
+        }
+      } catch (error) {
+        console.error('Failed to load grades:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load grades',
+          variant: 'destructive',
+        });
+        setGrades([]);
+        setOverallAverage(0);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadGrades();
+  }, [toast]);
+
+  const getLetterGrade = (percentage: number) => {
+    if (percentage >= 97) return 'A+';
+    if (percentage >= 93) return 'A';
+    if (percentage >= 90) return 'A-';
+    if (percentage >= 87) return 'B+';
+    if (percentage >= 83) return 'B';
+    if (percentage >= 80) return 'B-';
+    if (percentage >= 77) return 'C+';
+    if (percentage >= 73) return 'C';
+    if (percentage >= 70) return 'C-';
+    if (percentage >= 67) return 'D+';
+    if (percentage >= 63) return 'D';
+    if (percentage >= 60) return 'D-';
+    return 'F';
   };
 
-  const subjectGrades = [
-    {
-      id: "1",
-      subject: "Advanced Mathematics",
-      tutor: "Mr. Smith",
-      currentGrade: 92,
-      credits: 4,
-      letterGrade: "A-",
-      trend: "up",
-      assignments: [
-        { name: "Quiz #1", grade: 95, maxGrade: 100, date: "2024-01-05" },
-        { name: "Problem Set #1", grade: 88, maxGrade: 100, date: "2024-01-10" },
-        { name: "Quiz #2", grade: 92, maxGrade: 100, date: "2024-01-15" },
-        { name: "Midterm Exam", grade: 94, maxGrade: 100, date: "2024-01-20" }
-      ]
-    },
-    {
-      id: "2",
-      subject: "Physics Fundamentals", 
-      tutor: "Dr. Johnson",
-      currentGrade: 85,
-      credits: 3,
-      letterGrade: "B+",
-      trend: "stable",
-      assignments: [
-        { name: "Lab Report #1", grade: 87, maxGrade: 100, date: "2024-01-08" },
-        { name: "Quiz #1", grade: 82, maxGrade: 100, date: "2024-01-12" },
-        { name: "Lab Report #2", grade: 89, maxGrade: 100, date: "2024-01-18" }
-      ]
-    },
-    {
-      id: "3",
-      subject: "English Literature",
-      tutor: "Ms. Williams", 
-      currentGrade: 88,
-      credits: 3,
-      letterGrade: "B+",
-      trend: "up",
-      assignments: [
-        { name: "Essay #1", grade: 85, maxGrade: 100, date: "2024-01-07" },
-        { name: "Poetry Analysis", grade: 92, maxGrade: 100, date: "2024-01-14" },
-        { name: "Book Report", grade: 87, maxGrade: 100, date: "2024-01-21" }
-      ]
-    },
-    {
-      id: "4",
-      subject: "Computer Science",
-      tutor: "Prof. Davis",
-      currentGrade: 79,
-      credits: 4,
-      letterGrade: "C+", 
-      trend: "down",
-      assignments: [
-        { name: "Programming Quiz", grade: 75, maxGrade: 100, date: "2024-01-06" },
-        { name: "Project #1", grade: 82, maxGrade: 100, date: "2024-01-13" },
-        { name: "Midterm Exam", grade: 78, maxGrade: 100, date: "2024-01-19" }
-      ]
-    }
-  ];
-
-  const getTrendIcon = (trend: string) => {
-    switch (trend) {
-      case 'up': return <TrendingUp className="h-4 w-4 text-green-600" />;
-      case 'down': return <TrendingUp className="h-4 w-4 text-red-600 rotate-180" />;
-      default: return <BarChart3 className="h-4 w-4 text-blue-600" />;
-    }
-  };
 
   const getGradeColor = (grade: number) => {
     if (grade >= 90) return "text-green-600";
@@ -103,6 +80,48 @@ const StudentGrades = () => {
     return "bg-red-500";
   };
 
+  // Group grades by subject/class
+  const groupedGrades = grades.reduce((acc: any, grade: any) => {
+    const key = grade.subject || grade.class_id || 'General';
+    if (!acc[key]) {
+      acc[key] = {
+        subject: key,
+        grades: [],
+        average: 0,
+      };
+    }
+    acc[key].grades.push(grade);
+    return acc;
+  }, {});
+
+  // Calculate averages for each subject
+  const subjectGrades = Object.values(groupedGrades).map((group: any) => {
+    // Calculate percentage average based on grade/max_grade
+    const totalPercentage = group.grades.reduce((sum: number, g: any) => {
+      const grade = parseFloat(g.grade || 0);
+      const maxGrade = parseFloat(g.max_grade || 1);
+      return sum + (maxGrade > 0 ? (grade / maxGrade) * 100 : 0);
+    }, 0);
+    const avg = totalPercentage / group.grades.length;
+    return {
+      ...group,
+      currentGrade: Math.round(avg),
+      letterGrade: getLetterGrade(avg),
+      credits: 3, // Default, would need to come from class data
+    };
+  });
+
+  // Calculate stats from actual grades data
+  const totalGrades = grades.length;
+  const uniqueSubjects = new Set(grades.map((g: any) => g.subject || g.class_id || 'General')).size;
+  
+  const overallStats = {
+    overallGrade: Math.round(overallAverage) || 0,
+    completedAssignments: totalGrades,
+    totalAssignments: totalGrades,
+    subjects: uniqueSubjects,
+  };
+
   return (
     <div className="flex-1 space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -115,18 +134,7 @@ const StudentGrades = () => {
       </div>
 
       {/* Overall Performance Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overall GPA</CardTitle>
-            <Award className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{overallStats.gpa}</div>
-            <p className="text-xs text-muted-foreground">Out of 4.0</p>
-          </CardContent>
-        </Card>
-
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Overall Grade</CardTitle>
@@ -140,29 +148,27 @@ const StudentGrades = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Assignments</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Grades</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {overallStats.completedAssignments}/{overallStats.totalAssignments}
+              {overallStats.completedAssignments}
             </div>
-            <p className="text-xs text-muted-foreground">Completed this semester</p>
+            <p className="text-xs text-muted-foreground">Graded assignments</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Class Rank</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Subjects</CardTitle>
+            <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              #{overallStats.classRank}
+              {overallStats.subjects}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Out of {overallStats.totalStudents} students
-            </p>
+            <p className="text-xs text-muted-foreground">Active subjects</p>
           </CardContent>
         </Card>
       </div>
@@ -174,79 +180,90 @@ const StudentGrades = () => {
         </TabsList>
 
         <TabsContent value="subjects" className="space-y-4">
-          <div className="grid gap-4">
-            {subjectGrades.map((subject) => (
-              <Card key={subject.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="flex items-center gap-2">
-                        {subject.subject}
-                        {getTrendIcon(subject.trend)}
-                      </CardTitle>
-                      <CardDescription>
-                        {subject.tutor} • {subject.credits} Credits
-                      </CardDescription>
-                    </div>
-                    <div className="text-right space-y-1">
-                      <div className={`text-3xl font-bold ${getGradeColor(subject.currentGrade)}`}>
-                        {subject.currentGrade}%
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : subjectGrades.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-muted-foreground">No grades available yet.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {subjectGrades.map((subject, index) => (
+                <Card key={index}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <CardTitle className="flex items-center gap-2">
+                          {subject.subject}
+                        </CardTitle>
+                        <CardDescription>
+                          {subject.credits} Credits
+                        </CardDescription>
                       </div>
-                      <Badge 
-                        className={`${getLetterGradeColor(subject.letterGrade)} text-white border-0`}
+                      <div className="text-right space-y-1">
+                        <div className={`text-3xl font-bold ${getGradeColor(subject.currentGrade)}`}>
+                          {subject.currentGrade}%
+                        </div>
+                        <Badge 
+                          className={`${getLetterGradeColor(subject.letterGrade)} text-white border-0`}
+                        >
+                          {subject.letterGrade}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="font-medium">Course Progress</span>
+                          <span>{subject.currentGrade}%</span>
+                        </div>
+                        <Progress value={subject.currentGrade} className="h-2" />
+                      </div>
+
+                      <div>
+                        <h4 className="font-medium mb-3">Recent Grades</h4>
+                        <div className="space-y-2">
+                          {subject.grades.slice(-3).map((grade: any, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded">
+                              <div className="space-y-0">
+                                <p className="font-medium text-sm">{grade.assessment || grade.assignment?.title || 'Grade'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(grade.date || grade.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <div className={`font-bold ${getGradeColor(Math.round((parseFloat(grade.grade || 0) / parseFloat(grade.max_grade || 1)) * 100))}`}>
+                                  {parseFloat(grade.grade || 0).toFixed(1)}/{parseFloat(grade.max_grade || 0).toFixed(1)}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {Math.round((parseFloat(grade.grade || 0) / parseFloat(grade.max_grade || 1)) * 100)}%
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setDetailsModal({ isOpen: true, subject })}
+                        className="mt-4"
                       >
-                        {subject.letterGrade}
-                      </Badge>
+                        View Details
+                      </Button>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="font-medium">Course Progress</span>
-                        <span>{subject.currentGrade}%</span>
-                      </div>
-                      <Progress value={subject.currentGrade} className="h-2" />
-                    </div>
-
-                    <div>
-                      <h4 className="font-medium mb-3">Recent Assignments</h4>
-                      <div className="space-y-2">
-                        {subject.assignments.slice(-3).map((assignment, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                            <div className="space-y-0">
-                              <p className="font-medium text-sm">{assignment.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {new Date(assignment.date).toLocaleDateString()}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <div className={`font-bold ${getGradeColor(assignment.grade)}`}>
-                                {assignment.grade}/{assignment.maxGrade}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {Math.round((assignment.grade / assignment.maxGrade) * 100)}%
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => setDetailsModal({ isOpen: true, subject })}
-                      className="mt-4"
-                    >
-                      View Details
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="timeline" className="space-y-4">
@@ -256,36 +273,38 @@ const StudentGrades = () => {
               <CardDescription>Your academic performance over time</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {subjectGrades.flatMap(subject => 
-                  subject.assignments.map(assignment => ({
-                    ...assignment,
-                    subject: subject.subject,
-                    tutor: subject.tutor
-                  }))
-                )
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .slice(0, 10)
-                .map((assignment, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="space-y-1">
-                      <h4 className="font-semibold">{assignment.name}</h4>
-                      <p className="text-sm text-muted-foreground">{assignment.subject}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(assignment.date).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="text-right space-y-1">
-                      <div className={`text-2xl font-bold ${getGradeColor(assignment.grade)}`}>
-                        {assignment.grade}%
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : grades.length === 0 ? (
+                <p className="text-center text-muted-foreground py-12">No grades available yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {grades
+                    .sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime())
+                    .slice(0, 10)
+                    .map((grade, index) => (
+                      <div key={grade.id || index} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="space-y-1">
+                          <h4 className="font-semibold">{grade.assessment || grade.assignment?.title || 'Grade'}</h4>
+                          <p className="text-sm text-muted-foreground">{grade.subject}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(grade.date || grade.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="text-right space-y-1">
+                          <div className={`text-2xl font-bold ${getGradeColor(Math.round((parseFloat(grade.grade || 0) / parseFloat(grade.max_grade || 1)) * 100))}`}>
+                            {Math.round((parseFloat(grade.grade || 0) / parseFloat(grade.max_grade || 1)) * 100)}%
+                          </div>
+                          <Badge variant="outline">
+                            {parseFloat(grade.grade || 0).toFixed(1)}/{parseFloat(grade.max_grade || 0).toFixed(1)}
+                          </Badge>
+                        </div>
                       </div>
-                      <Badge variant="outline">
-                        {assignment.grade}/{assignment.maxGrade}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

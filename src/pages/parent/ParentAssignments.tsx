@@ -32,13 +32,17 @@ import {
 } from 'lucide-react';
 import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
 import { useParentContext, useParentStore } from '@/lib/store/parentStore';
-import { parentService } from '@/lib/mocks/parent';
+import { parentApi } from '@/lib/api';
 import type { ParentAssignment } from '@/lib/store/parentStore';
 
 export default function ParentAssignments() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedAssignment, setSelectedAssignment] = useState<ParentAssignment | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalAssignments, setTotalAssignments] = useState(0);
   
   const {
     activeChild,
@@ -51,26 +55,79 @@ export default function ParentAssignments() {
     setLoading,
   } = useParentStore();
 
-  // Load assignments when active child changes
+  // Load assignments when active child changes or page changes
   useEffect(() => {
     if (!activeChild?.id) return;
 
     const loadAssignments = async () => {
       try {
         setLoading(true);
-        const assignmentsData = await parentService.getAssignmentsForChild(activeChild.id);
-        setAssignments(assignmentsData);
+        const response = await parentApi.getChildAssignments(Number(activeChild.id), {
+          page: currentPage,
+          per_page: perPage,
+        });
+        
+        // Handle paginated response
+        let assignmentsArray = [];
+        if (Array.isArray(response)) {
+          assignmentsArray = response;
+        } else if (response.data && Array.isArray(response.data)) {
+          assignmentsArray = response.data;
+          // Set pagination info
+          if (response.current_page) {
+            setCurrentPage(response.current_page);
+            setTotalPages(response.last_page || 1);
+            setTotalAssignments(response.total || 0);
+          }
+        }
+        
+        // Map API response to store format
+        const mappedAssignments = assignmentsArray.map((a: any) => {
+          const submission = a.submissions?.[0];
+          let status: 'due' | 'submitted' | 'late' | 'graded' = 'due';
+          
+          if (submission) {
+            if (submission.status === 'graded') status = 'graded';
+            else if (submission.status === 'submitted') status = 'submitted';
+          } else {
+            // Check if overdue
+            const dueDate = new Date(a.due_date);
+            const now = new Date();
+            if (dueDate < now) status = 'late';
+          }
+          
+          return {
+            id: String(a.id),
+            title: a.title,
+            subject: (a.class && a.class.category) ? a.class.category : (a.class && a.class.name ? a.class.name : 'Unknown'),
+            dueDate: a.due_date,
+            status,
+            grade: submission?.grade,
+            maxGrade: a.max_points,
+            feedback: submission?.feedback,
+            rubric: a.description,
+          };
+        });
+        
+        setAssignments(mappedAssignments);
+        
+        // If no pagination data was set above, set defaults
+        if (!response.current_page) {
+          setTotalPages(1);
+          setTotalAssignments(mappedAssignments.length);
+        }
       } catch (error) {
         console.error('Failed to load assignments:', error);
+        setAssignments([]);
       } finally {
         setLoading(false);
       }
     };
 
     loadAssignments();
-  }, [activeChild?.id, setAssignments, setLoading]);
+  }, [activeChild?.id, currentPage, perPage, setAssignments, setLoading]);
 
-  // Filter assignments based on search and status
+  // Filter assignments based on search and status (client-side filtering on current page)
   const filteredAssignments = assignments?.filter((assignment) => {
     const matchesSearch = assignment.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          assignment.subject.toLowerCase().includes(searchTerm.toLowerCase());
@@ -374,6 +431,58 @@ export default function ParentAssignments() {
                 );
               })}
             </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * perPage) + 1} to {Math.min(currentPage * perPage, totalAssignments)} of {totalAssignments} assignments
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1 || isLoading}
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(pageNum)}
+                          disabled={isLoading}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages || isLoading}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (

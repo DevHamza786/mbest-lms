@@ -6,7 +6,7 @@ import path from "path";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173, // Changed from 8080 to avoid conflict with Reverb
   },
   plugins: [react()],
   resolve: {

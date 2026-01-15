@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useTheme } from '@/components/theme/ThemeProvider';
 import { 
-  GraduationCap, 
   Menu, 
   Sun, 
   Moon, 
@@ -61,16 +60,16 @@ export function ModernNavbar() {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
             <motion.div 
-              className="w-10 h-10 bg-gradient-primary rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
-              whileHover={{ rotate: 360 }}
-              transition={{ duration: 0.8 }}
+              className="flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
+              whileHover={{ scale: 1.05 }}
+              transition={{ duration: 0.3 }}
             >
-              <GraduationCap className="h-5 w-5 text-white" />
+              <img 
+                src="/M.B.E.S.T-logo.png" 
+                alt="MBEST Logo" 
+                className="h-10 w-auto object-contain"
+              />
             </motion.div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">MBEST</h1>
-              <p className="text-xs text-muted-foreground">Tutoring Centre</p>
-            </div>
           </Link>
 
           {/* Desktop Navigation */}

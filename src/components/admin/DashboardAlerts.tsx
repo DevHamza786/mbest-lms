@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,8 +12,10 @@ import {
   Clock,
   ShieldAlert,
   ClipboardList,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from "lucide-react";
+import { adminApi } from "@/lib/api";
 
 interface AlertItem {
   id: string;
@@ -22,90 +25,71 @@ interface AlertItem {
   description: string;
   count: number;
   action: string;
-  actionUrl: string;
-  icon: typeof AlertTriangle;
+  action_url: string;
+  icon?: typeof AlertTriangle;
 }
 
+const iconMap: Record<string, typeof AlertTriangle> = {
+  'session': Calendar,
+  'billing': DollarSign,
+  'attendance': Clock,
+  'profile': UserX,
+  'compliance': ShieldAlert,
+  'default': FileText,
+};
+
 export default function DashboardAlerts() {
-  const alerts: AlertItem[] = [
-    {
-      id: '1',
-      type: 'critical',
-      category: 'session',
-      title: 'Unbilled Sessions',
-      description: 'Sessions have been completed but not yet invoiced',
-      count: 12,
-      action: 'Review Sessions',
-      actionUrl: '/admin/billing?filter=unbilled',
-      icon: DollarSign,
-    },
-    {
-      id: '2',
-      type: 'critical',
-      category: 'compliance',
-      title: 'Expiring Compliance Documents',
-      description: 'Teacher certifications expiring within 30 days',
-      count: 3,
-      action: 'View Documents',
-      actionUrl: '/admin/users?tab=tutors&filter=expiring',
-      icon: ShieldAlert,
-    },
-    {
-      id: '3',
-      type: 'warning',
-      category: 'session',
-      title: 'Missing Lesson Notes',
-      description: 'Completed sessions without lesson notes',
-      count: 8,
-      action: 'Review Sessions',
-      actionUrl: '/admin/classes?filter=missing-notes',
-      icon: FileText,
-    },
-    {
-      id: '4',
-      type: 'warning',
-      category: 'session',
-      title: 'Conflicting Bookings',
-      description: 'Teachers scheduled for multiple sessions at the same time',
-      count: 2,
-      action: 'Resolve Conflicts',
-      actionUrl: '/admin/calendar?filter=conflicts',
-      icon: Calendar,
-    },
-    {
-      id: '5',
-      type: 'info',
-      category: 'billing',
-      title: 'Overdue Invoices',
-      description: 'Student invoices past due date',
-      count: 5,
-      action: 'View Invoices',
-      actionUrl: '/admin/billing?filter=overdue',
-      icon: Clock,
-    },
-    {
-      id: '6',
-      type: 'info',
-      category: 'profile',
-      title: 'Incomplete Profiles',
-      description: 'Student or teacher profiles with missing information',
-      count: 7,
-      action: 'Review Profiles',
-      actionUrl: '/admin/users?filter=incomplete',
-      icon: UserX,
-    },
-    {
-      id: '7',
-      type: 'warning',
-      category: 'attendance',
-      title: 'Pending Timesheet Approvals',
-      description: 'Tutor timesheets awaiting approval',
-      count: 15,
-      action: 'Review Timesheets',
-      actionUrl: '/admin/hours?filter=pending',
-      icon: ClipboardList,
-    },
-  ];
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadAlerts = async () => {
+      try {
+        setIsLoading(true);
+        const data = await adminApi.getDashboard();
+        const systemAlerts = data?.system_alerts || [];
+        
+        // Map alerts and add icons
+        const mappedAlerts = systemAlerts.map((alert: any) => ({
+          ...alert,
+          icon: iconMap[alert.category] || iconMap['default'],
+        }));
+        
+        setAlerts(mappedAlerts);
+      } catch (error) {
+        console.error('Failed to load alerts:', error);
+        setAlerts([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAlerts();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-destructive/20">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-destructive" />
+                  System Alerts
+                </CardTitle>
+                <CardDescription>Loading alerts...</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  if (alerts.length === 0) {
+    return null; // Don't show the alerts card if there are no alerts
+  }
 
   const getAlertVariant = (type: AlertItem['type']) => {
     switch (type) {
@@ -114,6 +98,8 @@ export default function DashboardAlerts() {
       case 'warning':
         return 'default';
       case 'info':
+        return 'default';
+      default:
         return 'default';
     }
   };
@@ -183,7 +169,7 @@ export default function DashboardAlerts() {
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => window.location.href = alert.actionUrl}
+                          onClick={() => window.location.href = alert.action_url}
                         >
                           {alert.action}
                           <ChevronRight className="h-4 w-4 ml-1" />
@@ -224,7 +210,7 @@ export default function DashboardAlerts() {
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => window.location.href = alert.actionUrl}
+                          onClick={() => window.location.href = alert.action_url}
                         >
                           {alert.action}
                           <ChevronRight className="h-4 w-4 ml-1" />
@@ -265,7 +251,7 @@ export default function DashboardAlerts() {
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => window.location.href = alert.actionUrl}
+                          onClick={() => window.location.href = alert.action_url}
                         >
                           {alert.action}
                           <ChevronRight className="h-4 w-4 ml-1" />

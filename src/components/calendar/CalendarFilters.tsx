@@ -1,32 +1,30 @@
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { SessionFilter, SessionLocation, SessionType, SessionStatus } from '@/lib/types/session';
 
 interface CalendarFiltersProps {
   filters: SessionFilter;
   onFilterChange: (filters: SessionFilter) => void;
   onClearFilters: () => void;
+  filterOptions?: {
+    teachers: Array<{ id: string; name: string }>;
+    students: Array<{ id: string; name: string }>;
+    subjects: string[];
+    locations: string[];
+    session_types: string[];
+    statuses: string[];
+  };
+  isLoading?: boolean;
 }
 
-// Mock data - replace with actual data
-const mockTeachers = [
-  { id: 'tutor-1', name: 'Dr. Michael Rodriguez' },
-  { id: 'tutor-2', name: 'Sarah Chen' },
-  { id: 'tutor-3', name: 'James Wilson' },
-];
-
-const mockStudents = [
-  { id: 'student-1', name: 'Emma Thompson' },
-  { id: 'student-2', name: 'Sampoorna Arora' },
-  { id: 'student-3', name: 'Xavier Dean' },
-];
-
-const subjects = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Computer Science'];
-
-export function CalendarFilters({ filters, onFilterChange, onClearFilters }: CalendarFiltersProps) {
+export function CalendarFilters({ filters, onFilterChange, onClearFilters, filterOptions, isLoading = false }: CalendarFiltersProps) {
   const hasActiveFilters = Object.values(filters).some(value => value !== undefined && value !== '');
+  
+  // Debug logging
+  console.log('CalendarFilters - filterOptions:', filterOptions);
+  console.log('CalendarFilters - isLoading:', isLoading);
 
   return (
     <div className="bg-card p-4 rounded-lg border space-y-4">
@@ -53,9 +51,16 @@ export function CalendarFilters({ filters, onFilterChange, onClearFilters }: Cal
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Teachers</SelectItem>
-              {mockTeachers.map(teacher => (
-                <SelectItem key={teacher.id} value={teacher.id}>{teacher.name}</SelectItem>
-              ))}
+              {isLoading ? (
+                <SelectItem value="loading" disabled>
+                  <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                  Loading...
+                </SelectItem>
+              ) : (
+                filterOptions?.teachers?.map(teacher => (
+                  <SelectItem key={teacher.id} value={teacher.id}>{teacher.name}</SelectItem>
+                )) || null
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -72,9 +77,16 @@ export function CalendarFilters({ filters, onFilterChange, onClearFilters }: Cal
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Students</SelectItem>
-              {mockStudents.map(student => (
-                <SelectItem key={student.id} value={student.id}>{student.name}</SelectItem>
-              ))}
+              {isLoading ? (
+                <SelectItem value="loading" disabled>
+                  <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                  Loading...
+                </SelectItem>
+              ) : (
+                filterOptions?.students?.map(student => (
+                  <SelectItem key={student.id} value={student.id}>{student.name}</SelectItem>
+                )) || null
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -91,9 +103,16 @@ export function CalendarFilters({ filters, onFilterChange, onClearFilters }: Cal
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Subjects</SelectItem>
-              {subjects.map(subject => (
-                <SelectItem key={subject} value={subject}>{subject}</SelectItem>
-              ))}
+              {isLoading ? (
+                <SelectItem value="loading" disabled>
+                  <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                  Loading...
+                </SelectItem>
+              ) : (
+                filterOptions?.subjects?.map(subject => (
+                  <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+                )) || null
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -110,9 +129,16 @@ export function CalendarFilters({ filters, onFilterChange, onClearFilters }: Cal
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Locations</SelectItem>
-              <SelectItem value="online">Online</SelectItem>
-              <SelectItem value="centre">Centre</SelectItem>
-              <SelectItem value="home">Home</SelectItem>
+              {isLoading ? (
+                <SelectItem value="loading" disabled>
+                  <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                  Loading...
+                </SelectItem>
+              ) : (
+                filterOptions?.locations?.map(location => (
+                  <SelectItem key={location} value={location}>{location.charAt(0).toUpperCase() + location.slice(1)}</SelectItem>
+                )) || null
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -129,8 +155,16 @@ export function CalendarFilters({ filters, onFilterChange, onClearFilters }: Cal
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="1:1">1:1</SelectItem>
-              <SelectItem value="group">Group</SelectItem>
+              {isLoading ? (
+                <SelectItem value="loading" disabled>
+                  <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                  Loading...
+                </SelectItem>
+              ) : (
+                filterOptions?.session_types?.map(type => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                )) || null
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -147,11 +181,16 @@ export function CalendarFilters({ filters, onFilterChange, onClearFilters }: Cal
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="planned">Planned</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-              <SelectItem value="no-show">No-show</SelectItem>
-              <SelectItem value="rescheduled">Rescheduled</SelectItem>
+              {isLoading ? (
+                <SelectItem value="loading" disabled>
+                  <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                  Loading...
+                </SelectItem>
+              ) : (
+                filterOptions?.statuses?.map(status => (
+                  <SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}</SelectItem>
+                )) || null
+              )}
             </SelectContent>
           </Select>
         </div>

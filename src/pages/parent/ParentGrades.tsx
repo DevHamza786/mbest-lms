@@ -31,13 +31,14 @@ import {
 } from 'lucide-react';
 import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
 import { useParentContext, useParentStore } from '@/lib/store/parentStore';
-import { parentService } from '@/lib/mocks/parent';
+import { parentApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ParentGrades() {
   const [searchTerm, setSearchTerm] = useState('');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [apiStats, setApiStats] = useState<any>(null);
   const { toast } = useToast();
   
   const {
@@ -58,10 +59,32 @@ export default function ParentGrades() {
     const loadGrades = async () => {
       try {
         setLoading(true);
-        const gradesData = await parentService.getGradesForChild(activeChild.id);
-        setGrades(gradesData);
+        const response = await parentApi.getChildGrades(Number(activeChild.id));
+        
+        // Extract grades array from response
+        const gradesArray = response.grades || [];
+        
+        // Store API statistics
+        if (response.statistics) {
+          setApiStats(response.statistics);
+        }
+        
+        // Map API response to store format
+        const mappedGrades = gradesArray.map((g: any) => ({
+          id: String(g.id),
+          subject: g.subject,
+          assessment: g.assessment,
+          grade: parseFloat(g.grade) || 0,
+          maxGrade: parseFloat(g.max_grade) || 0,
+          date: g.date,
+          category: g.category || '',
+        }));
+        
+        setGrades(mappedGrades);
       } catch (error) {
         console.error('Failed to load grades:', error);
+        setGrades([]);
+        setApiStats(null);
       } finally {
         setLoading(false);
       }
@@ -83,10 +106,29 @@ export default function ParentGrades() {
     return matchesSearch && matchesSubject && matchesCategory;
   }) || [];
 
-  // Calculate statistics
+  // Calculate statistics - use API stats if available, otherwise calculate from grades
   const calculateSubjectStats = () => {
     if (!grades?.length) return [];
     
+    // If we have API stats with average_by_subject, use that
+    if (apiStats?.average_by_subject) {
+      return Object.keys(apiStats.average_by_subject).map(subject => {
+        const average = parseFloat(apiStats.average_by_subject[subject]) || 0;
+        const subjectGrades = grades.filter(g => g.subject === subject);
+        const highest = subjectGrades.length > 0 ? Math.max(...subjectGrades.map(g => g.grade)) : average;
+        const lowest = subjectGrades.length > 0 ? Math.min(...subjectGrades.map(g => g.grade)) : average;
+        
+        return {
+          subject,
+          average: Math.round(average),
+          highest: Math.round(highest),
+          lowest: Math.round(lowest),
+          count: subjectGrades.length
+        };
+      }).sort((a, b) => b.average - a.average);
+    }
+    
+    // Fallback: calculate from grades
     const subjectStats = subjects.map(subject => {
       const subjectGrades = grades.filter(g => g.subject === subject);
       const average = subjectGrades.reduce((sum, g) => sum + g.grade, 0) / subjectGrades.length;
@@ -105,9 +147,17 @@ export default function ParentGrades() {
     return subjectStats.sort((a, b) => b.average - a.average);
   };
 
-  const overallAverage = grades?.length 
-    ? Math.round(grades.reduce((sum, g) => sum + g.grade, 0) / grades.length)
-    : 0;
+  // Use API overall_average if available, otherwise calculate from grades
+  const overallAverage = apiStats?.overall_average 
+    ? Math.round(parseFloat(apiStats.overall_average))
+    : (grades && grades.length > 0
+      ? Math.round(grades.reduce((sum, g) => sum + (g.grade || 0), 0) / grades.length)
+      : 0);
+
+  // Use API highest_grade if available, otherwise calculate from grades
+  const highestGrade = apiStats?.highest_grade
+    ? Math.round(parseFloat(apiStats.highest_grade))
+    : (grades?.length ? Math.max(...grades.map(g => g.grade)) : 0);
 
   const getGradeColor = (grade: number) => {
     if (grade >= 90) return 'text-green-600';
@@ -198,7 +248,7 @@ export default function ParentGrades() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {grades?.length ? Math.max(...grades.map(g => g.grade)) : 0}%
+              {highestGrade}%
             </div>
             <p className="text-xs text-muted-foreground">Best performance</p>
           </CardContent>

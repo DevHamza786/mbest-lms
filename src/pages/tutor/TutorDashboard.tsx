@@ -1,27 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, FileText, Clock, BookOpen, MessageSquare, Plus, Mail, Video, ExternalLink, Palette, BookMarked, Library } from "lucide-react";
+import { Calendar, Users, FileText, Clock, BookOpen, MessageSquare, Plus, Loader2, X, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import classesData from '@/data/classes.json';
+import { tutorApi } from '@/lib/api';
 
 const TutorDashboard = () => {
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false);
   const [isMessageOpen, setIsMessageOpen] = useState(false);
+  
+  const [dashboardData, setDashboardData] = useState({
+    total_students: 0,
+    total_classes: 0,
+    pending_assignments: 0,
+    unread_messages: 0,
+    upcoming_sessions: [] as any[],
+    tutor: null as any,
+  });
+
+  const [myClasses, setMyClasses] = useState<any[]>([]);
+  const [filteredClasses, setFilteredClasses] = useState<any[]>([]);
+  const [availableStudents, setAvailableStudents] = useState<any[]>([]);
   
   const [newSession, setNewSession] = useState({
     title: '',
     date: '',
     time: '',
     class: '',
+    studentIds: [] as number[],
   });
 
   const [newAssignment, setNewAssignment] = useState({
@@ -37,9 +57,83 @@ const TutorDashboard = () => {
     message: '',
   });
 
-  const myClasses = classesData.filter(cls => cls.tutorId === 'tutor-1');
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        setIsLoading(true);
+        const [dashboard, classes, students] = await Promise.all([
+          tutorApi.getDashboard(),
+          tutorApi.getClasses(),
+          tutorApi.getStudents(),
+        ]);
+        console.log('Dashboard data received:', dashboard);
+        console.log('Classes received:', classes);
+        setDashboardData({
+          total_students: dashboard.total_students || 0,
+          total_classes: dashboard.total_classes || 0,
+          pending_assignments: dashboard.pending_assignments || 0,
+          unread_messages: dashboard.unread_messages || 0,
+          upcoming_sessions: dashboard.upcoming_sessions || [],
+          tutor: dashboard.tutor || null,
+        });
+        setMyClasses(classes || []);
+        
+        // Filter classes by tutor's specializations
+        if (dashboard.tutor?.specialization && Array.isArray(dashboard.tutor.specialization) && dashboard.tutor.specialization.length > 0) {
+          console.log('Tutor specializations:', dashboard.tutor.specialization);
+          const tutorSpecializations = dashboard.tutor.specialization.map((s: string) => s.toLowerCase().trim());
+          const filtered = (classes || []).filter((cls: any) => {
+            // Check if class belongs to this tutor
+            if (cls.tutor_id && cls.tutor_id === dashboard.tutor.id) {
+              return true;
+            }
+            
+            // Check if class category matches any specialization
+            const classCategory = (cls.category || '').toLowerCase().trim();
+            if (!classCategory) return false;
+            
+            return tutorSpecializations.some((spec: string) => {
+              // More flexible matching
+              return classCategory === spec || 
+                     classCategory.includes(spec) || 
+                     spec.includes(classCategory) ||
+                     classCategory.split(' ').some(word => spec.includes(word)) ||
+                     spec.split(' ').some(word => classCategory.includes(word));
+            });
+          });
+          
+          console.log('Filtered classes:', filtered);
+          
+          // If filtering results in empty array, show all classes as fallback
+          if (filtered.length > 0) {
+            setFilteredClasses(filtered);
+          } else {
+            console.log('No classes match specializations, showing all classes');
+            setFilteredClasses(classes || []);
+          }
+        } else {
+          // If no specializations, show all classes
+          console.log('No specializations found, showing all classes');
+          setFilteredClasses(classes || []);
+        }
+        
+        setAvailableStudents(students || []);
+      } catch (error) {
+        console.error('Failed to load dashboard:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load dashboard data',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const handleScheduleClass = () => {
+    loadDashboard();
+  }, [toast]);
+
+  const handleScheduleClass = async () => {
     if (!newSession.title || !newSession.date || !newSession.time || !newSession.class) {
       toast({
         title: "Missing Information",
@@ -49,12 +143,113 @@ const TutorDashboard = () => {
       return;
     }
 
-    toast({
-      title: "Class Scheduled",
-      description: `${newSession.title} has been scheduled successfully.`,
-    });
-    setNewSession({ title: '', date: '', time: '', class: '' });
-    setIsScheduleOpen(false);
+    if (newSession.studentIds.length === 0) {
+      toast({
+        title: "Missing Information",
+        description: "Please select at least one student.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Parse time to HH:MM format
+      const [hours, minutes] = newSession.time.split(':');
+      const startHour = parseInt(hours);
+      const startMin = parseInt(minutes);
+      const startTime = `${startHour.toString().padStart(2, '0')}:${startMin.toString().padStart(2, '0')}`;
+      
+      // Calculate end time (default duration to 1 hour)
+      // Handle hour overflow (if hour >= 24, wrap to next day by using 23:59 as max)
+      let endHour = startHour + 1;
+      let endMin = startMin;
+      
+      // If hour exceeds 23, cap at 23:59
+      if (endHour >= 24) {
+        endHour = 23;
+        endMin = 59;
+      }
+      
+      const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
+
+      // Get selected class to get subject/category
+      const selectedClass = filteredClasses.find(c => String(c.id) === newSession.class) || myClasses.find(c => String(c.id) === newSession.class);
+      
+      // Create session via API
+      await tutorApi.createSession({
+        date: newSession.date,
+        start_time: startTime,
+        end_time: endTime,
+        subject: newSession.title || selectedClass?.name || 'Class Session',
+        year_level: selectedClass?.level || '',
+        location: 'centre', // Default to centre, can be updated later
+        session_type: newSession.studentIds.length === 1 ? '1:1' : 'group',
+        student_ids: newSession.studentIds,
+        class_id: newSession.class ? Number(newSession.class) : undefined,
+      });
+
+      toast({
+        title: "Class Scheduled",
+        description: `${newSession.title} has been scheduled successfully.`,
+      });
+      
+      // Reload dashboard to show new session
+      const [dashboard, classes] = await Promise.all([
+        tutorApi.getDashboard(),
+        tutorApi.getClasses(),
+      ]);
+      setDashboardData({
+        total_students: dashboard.total_students || 0,
+        total_classes: dashboard.total_classes || 0,
+        pending_assignments: dashboard.pending_assignments || 0,
+        unread_messages: dashboard.unread_messages || 0,
+        upcoming_sessions: dashboard.upcoming_sessions || [],
+        tutor: dashboard.tutor || null,
+      });
+      setMyClasses(classes || []);
+      
+      // Filter classes again
+      if (dashboard.tutor?.specialization && Array.isArray(dashboard.tutor.specialization) && dashboard.tutor.specialization.length > 0) {
+        const tutorSpecializations = dashboard.tutor.specialization.map((s: string) => s.toLowerCase().trim());
+        const filtered = (classes || []).filter((cls: any) => {
+          // Check if class belongs to this tutor
+          if (cls.tutor_id && cls.tutor_id === dashboard.tutor.id) {
+            return true;
+          }
+          
+          // Check if class category matches any specialization
+          const classCategory = (cls.category || '').toLowerCase().trim();
+          if (!classCategory) return false;
+          
+          return tutorSpecializations.some((spec: string) => {
+            return classCategory === spec || 
+                   classCategory.includes(spec) || 
+                   spec.includes(classCategory) ||
+                   classCategory.split(' ').some(word => spec.includes(word)) ||
+                   spec.split(' ').some(word => classCategory.includes(word));
+          });
+        });
+        
+        // If filtering results in empty array, show all classes as fallback
+        if (filtered.length > 0) {
+          setFilteredClasses(filtered);
+        } else {
+          setFilteredClasses(classes || []);
+        }
+      } else {
+        setFilteredClasses(classes || []);
+      }
+      
+      setNewSession({ title: '', date: '', time: '', class: '', studentIds: [] });
+      setIsScheduleOpen(false);
+    } catch (error) {
+      console.error('Failed to schedule class:', error);
+      toast({
+        title: "Error",
+        description: "Failed to schedule class. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCreateAssignment = () => {
@@ -107,82 +302,70 @@ const TutorDashboard = () => {
     });
   };
   const stats = {
-    totalStudents: 28,
-    activeClasses: 4,
-    pendingAssignments: 6,
-    todaysClasses: 2,
+    totalStudents: dashboardData.total_students,
+    activeClasses: dashboardData.total_classes,
+    pendingAssignments: dashboardData.pending_assignments,
+    todaysClasses: (dashboardData.upcoming_sessions || []).filter(s => {
+      const sessionDate = new Date(s.date);
+      const today = new Date();
+      return sessionDate.toDateString() === today.toDateString();
+    }).length,
   };
 
-  const quickTools = [
-    { 
-      name: 'MS Teams', 
-      icon: Video, 
-      url: 'https://teams.microsoft.com', 
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100 dark:bg-blue-950'
-    },
-    { 
-      name: 'Email', 
-      icon: Mail, 
-      url: 'mailto:', 
-      color: 'text-green-600',
-      bgColor: 'bg-green-100 dark:bg-green-950'
-    },
-    { 
-      name: 'Canva', 
-      icon: Palette, 
-      url: 'https://www.canva.com', 
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100 dark:bg-purple-950'
-    },
-    { 
-      name: 'Library Resources', 
-      icon: BookMarked, 
-      url: '/tutor/resources', 
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100 dark:bg-orange-950'
-    },
-  ];
 
-  const upcomingClasses = [
-    {
-      id: "1",
-      name: "Advanced Mathematics",
-      time: "10:00 AM",
-      students: 8,
-      room: "Room A-101",
-      meetingLink: "https://meet.google.com/abc-xyz-123"
-    },
-    {
-      id: "2", 
-      name: "Physics Fundamentals",
-      time: "2:00 PM",
-      students: 6,
-      room: "Room B-203",
-      meetingLink: "https://meet.google.com/def-uvw-456"
-    }
-  ];
+  const upcomingClasses = (dashboardData.upcoming_sessions || []).slice(0, 2).map(session => ({
+    id: String(session.id),
+    name: session.subject,
+    time: `${session.start_time} - ${session.end_time}`,
+    students: session.students?.length || 0,
+    room: session.location === 'centre' ? 'Room TBD' : session.location,
+    meetingLink: session.location === 'online' ? 'https://meet.google.com/abc-xyz-123' : undefined,
+  }));
 
-  const recentAssignments = [
-    {
-      id: "1",
-      title: "Calculus Problem Set #3",
-      class: "Advanced Mathematics",
-      dueDate: "2024-01-20",
-      submissions: 6,
-      totalStudents: 8,
-      status: "active"
-    },
-    {
-      id: "2",
-      title: "Physics Lab Report",
-      class: "Physics Fundamentals",
-      dueDate: "2024-01-22",
-      submissions: 4,
-      totalStudents: 6,
-      status: "active"
+  // Load recent assignments
+  const [recentAssignments, setRecentAssignments] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadAssignments = async () => {
+      try {
+        setIsLoadingAssignments(true);
+        // Use the paginated API endpoint directly with per_page=5
+        const assignmentsResponse = await tutorApi.getAssignments({ per_page: 5 });
+        
+        // Extract assignments from the response
+        const assignments = assignmentsResponse?.assignments || [];
+        
+        // Transform assignments using data already included in the API response
+        const transformedAssignments = assignments.map((assignment: any) => {
+          // The API already includes submissions_count, total_students, and class_model
+          const submissionsCount = assignment.submissions_count || 0;
+          const totalStudents = assignment.total_students || (assignment.class_model?.enrolled || 0);
+          const className = assignment.class_model?.name || 'Class';
+          
+          return {
+            id: String(assignment.id),
+            title: assignment.title,
+            class: className,
+            dueDate: assignment.due_date,
+            submissions: submissionsCount,
+            totalStudents: totalStudents,
+            status: assignment.status,
+          };
+        });
+        
+        setRecentAssignments(transformedAssignments);
+      } catch (error) {
+        console.error('Failed to load assignments:', error);
+        setRecentAssignments([]);
+      } finally {
+        setIsLoadingAssignments(false);
+      }
+    };
+
+    if (!isLoading) {
+      loadAssignments();
     }
-  ];
+  }, [isLoading]);
 
   return (
     <div className="flex-1 space-y-6 p-6">
@@ -219,11 +402,101 @@ const TutorDashboard = () => {
                     <SelectValue placeholder="Select a class" />
                   </SelectTrigger>
                   <SelectContent>
-                    {myClasses.map(cls => (
-                      <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>
+                    {(filteredClasses.length > 0 ? filteredClasses : myClasses).map(cls => (
+                      <SelectItem key={cls.id} value={String(cls.id)}>{cls.name}</SelectItem>
                     ))}
+                    {filteredClasses.length === 0 && myClasses.length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">No classes available</div>
+                    )}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Students *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between h-auto min-h-10 py-2"
+                    >
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {newSession.studentIds.length === 0 ? (
+                          <span className="text-muted-foreground">Select students...</span>
+                        ) : (
+                          newSession.studentIds.map((studentId) => {
+                            const student = availableStudents.find(s => s.id === studentId);
+                            return (
+                              <Badge
+                                key={studentId}
+                                variant="secondary"
+                                className="mr-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setNewSession(prev => ({
+                                    ...prev,
+                                    studentIds: prev.studentIds.filter(id => id !== studentId)
+                                  }));
+                                }}
+                              >
+                                {student?.user?.name || `Student ${studentId}`}
+                                <X className="ml-1 h-3 w-3" />
+                              </Badge>
+                            );
+                          })
+                        )}
+                      </div>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <div className="max-h-60 overflow-y-auto">
+                      {availableStudents.length > 0 ? (
+                        <div className="p-2 space-y-2">
+                          {availableStudents.map((student) => (
+                            <div key={student.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`student-${student.id}`}
+                                checked={newSession.studentIds.includes(student.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setNewSession(prev => ({
+                                      ...prev,
+                                      studentIds: [...prev.studentIds, student.id]
+                                    }));
+                                  } else {
+                                    setNewSession(prev => ({
+                                      ...prev,
+                                      studentIds: prev.studentIds.filter(id => id !== student.id)
+                                    }));
+                                  }
+                                }}
+                              />
+                              <Label
+                                htmlFor={`student-${student.id}`}
+                                className="text-sm font-normal cursor-pointer flex-1"
+                              >
+                                {student.user?.name || `Student ${student.id}`}
+                                {student.grade && (
+                                  <span className="text-muted-foreground ml-2">({student.grade})</span>
+                                )}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-sm text-muted-foreground text-center">
+                          No students available
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                {newSession.studentIds.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {newSession.studentIds.length} student{newSession.studentIds.length !== 1 ? 's' : ''} selected
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -255,85 +528,69 @@ const TutorDashboard = () => {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-primary/20 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Students</CardTitle>
-            <Users className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalStudents}</div>
-            <p className="text-xs text-muted-foreground">Across all classes</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-success/20 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Classes</CardTitle>
-            <BookOpen className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeClasses}</div>
-            <p className="text-xs text-muted-foreground">This semester</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-warning/20 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Assignments</CardTitle>
-            <FileText className="h-4 w-4 text-warning" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingAssignments}</div>
-            <p className="text-xs text-muted-foreground">To review</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-secondary/20 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Classes</CardTitle>
-            <Calendar className="h-4 w-4 text-secondary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.todaysClasses}</div>
-            <p className="text-xs text-muted-foreground">Scheduled</p>
-          </CardContent>
-        </Card>
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                </CardTitle>
+                <div className="h-8 w-8 bg-muted animate-pulse rounded-full" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 w-20 bg-muted animate-pulse rounded mb-2" />
+                <div className="h-3 w-32 bg-muted animate-pulse rounded" />
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <Card className="border-primary/20 shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+                <Users className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalStudents}</div>
+                <p className="text-xs text-muted-foreground">Across all classes</p>
+              </CardContent>
+            </Card>
+            
+            <Card className="border-success/20 shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Classes</CardTitle>
+                <BookOpen className="h-4 w-4 text-success" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.activeClasses}</div>
+                <p className="text-xs text-muted-foreground">This semester</p>
+              </CardContent>
+            </Card>
+            
+            <Card className="border-warning/20 shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Assignments</CardTitle>
+                <FileText className="h-4 w-4 text-warning" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.pendingAssignments}</div>
+                <p className="text-xs text-muted-foreground">To review</p>
+              </CardContent>
+            </Card>
+            
+            <Card className="border-secondary/20 shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Today's Classes</CardTitle>
+                <Calendar className="h-4 w-4 text-secondary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.todaysClasses}</div>
+                <p className="text-xs text-muted-foreground">Scheduled</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
-
-      {/* Quick Tools Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Library className="h-5 w-5" />
-            Quick Tools
-          </CardTitle>
-          <CardDescription>Access frequently used tools and resources</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {quickTools.map((tool) => {
-              const Icon = tool.icon;
-              return (
-                <a
-                  key={tool.name}
-                  href={tool.url}
-                  target={tool.url.startsWith('http') ? '_blank' : '_self'}
-                  rel={tool.url.startsWith('http') ? 'noopener noreferrer' : ''}
-                  className="flex items-center gap-3 p-4 rounded-lg border hover:bg-accent transition-colors group"
-                >
-                  <div className={`p-2 rounded-lg ${tool.bgColor} group-hover:scale-110 transition-transform`}>
-                    <Icon className={`h-5 w-5 ${tool.color}`} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{tool.name}</p>
-                  </div>
-                  <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                </a>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Upcoming Classes */}
@@ -343,26 +600,36 @@ const TutorDashboard = () => {
             <CardDescription>Your scheduled classes for today</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {upcomingClasses.map((classItem) => (
-              <div key={classItem.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-1">
-                  <h4 className="font-semibold">{classItem.name}</h4>
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Clock className="mr-1 h-3 w-3" />
-                    {classItem.time}
-                    <span className="mx-2">•</span>
-                    <Users className="mr-1 h-3 w-3" />
-                    {classItem.students} students
-                  </div>
-                  <p className="text-sm text-muted-foreground">{classItem.room}</p>
-                </div>
-                <Button size="sm" asChild>
-                  <a href={classItem.meetingLink} target="_blank" rel="noopener noreferrer">
-                    Join Meeting
-                  </a>
-                </Button>
+            {isLoading ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ))}
+            ) : upcomingClasses.length > 0 ? (
+              upcomingClasses.map((classItem) => (
+                <div key={classItem.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-1">
+                    <h4 className="font-semibold">{classItem.name}</h4>
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <Clock className="mr-1 h-3 w-3" />
+                      {classItem.time}
+                      <span className="mx-2">•</span>
+                      <Users className="mr-1 h-3 w-3" />
+                      {classItem.students} students
+                    </div>
+                    {classItem.room && <p className="text-sm text-muted-foreground">{classItem.room}</p>}
+                  </div>
+                  {classItem.meetingLink && (
+                    <Button size="sm" asChild>
+                      <a href={classItem.meetingLink} target="_blank" rel="noopener noreferrer">
+                        Join Meeting
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No upcoming classes today</p>
+            )}
           </CardContent>
         </Card>
 
@@ -373,25 +640,33 @@ const TutorDashboard = () => {
             <CardDescription>Track student submissions and grading</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {recentAssignments.map((assignment) => (
-              <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-1">
-                  <h4 className="font-semibold">{assignment.title}</h4>
-                  <p className="text-sm text-muted-foreground">{assignment.class}</p>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">
-                      {assignment.submissions}/{assignment.totalStudents} submitted
-                    </Badge>
-                    <Badge variant={assignment.status === 'active' ? 'default' : 'secondary'}>
-                      {assignment.status}
-                    </Badge>
-                  </div>
-                </div>
-                <Button variant="outline" size="sm">
-                  Review
-                </Button>
+            {isLoadingAssignments ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ))}
+            ) : recentAssignments.length > 0 ? (
+              recentAssignments.map((assignment) => (
+                <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-1">
+                    <h4 className="font-semibold">{assignment.title}</h4>
+                    <p className="text-sm text-muted-foreground">{assignment.class}</p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">
+                        {assignment.submissions}/{assignment.totalStudents} submitted
+                      </Badge>
+                      <Badge variant={assignment.status === 'published' ? 'default' : 'secondary'}>
+                        {assignment.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/tutor/assignments/${assignment.id}`)}>
+                    Review
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No recent assignments</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -435,9 +710,12 @@ const TutorDashboard = () => {
                         <SelectValue placeholder="Select a class" />
                       </SelectTrigger>
                       <SelectContent>
-                        {myClasses.map(cls => (
-                          <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>
+                        {(filteredClasses.length > 0 ? filteredClasses : myClasses).map(cls => (
+                          <SelectItem key={cls.id} value={String(cls.id)}>{cls.name}</SelectItem>
                         ))}
+                        {filteredClasses.length === 0 && myClasses.length === 0 && (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">No classes available</div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

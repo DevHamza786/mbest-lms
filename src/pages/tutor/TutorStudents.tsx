@@ -1,18 +1,28 @@
-import { useState } from 'react';
-import { Search, Mail, Phone, MoreHorizontal, FileText, MessageSquare, TrendingUp, Plus, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Mail, Phone, MoreHorizontal, FileText, TrendingUp, X, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import classesData from '@/data/classes.json';
-import usersData from '@/data/users.json';
+import { tutorApi } from '@/lib/api';
+import { StudentProgressModal } from '@/components/modals/StudentProgressModal';
+import { StudentAssignmentsModal } from '@/components/modals/StudentAssignmentsModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Student {
   id: string;
@@ -40,115 +50,99 @@ export default function TutorStudents() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [students, setStudents] = useState<Student[]>([]);
+  const [myClasses, setMyClasses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [showAssignmentsModal, setShowAssignmentsModal] = useState(false);
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false);
+  const [studentToRemove, setStudentToRemove] = useState<{ studentId: string; studentName: string; classIds: number[] } | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
 
-  // Mock students data based on classes (matching the document examples)
-  const myClasses = classesData.filter(cls => cls.tutorId === 'tutor-1');
-  const [students] = useState<Student[]>([
-    {
-      id: 'student-1',
-      name: 'Arora, Sampoorna',
-      family: 'Arora',
-      email: '',
-      mobilePhone: '',
-      homePhone: '',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-      enrollmentId: 'ST2024001',
-      grade: '12',
-      classes: ['class-1'],
-      overallGrade: 85,
-      attendance: 92,
-      assignments: { completed: 8, total: 10 },
-      status: 'active',
-      type: 'Child'
-    },
-    {
-      id: 'student-2',
-      name: 'Askary, Natasha',
-      family: 'Askary',
-      email: 'agbi@hotmail.com.au',
-      mobilePhone: '0422219973',
-      homePhone: '',
-      avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
-      enrollmentId: 'ST2024002',
-      grade: '11',
-      classes: ['class-1'],
-      overallGrade: 88,
-      attendance: 95,
-      assignments: { completed: 7, total: 8 },
-      status: 'active',
-      type: 'Child'
-    },
-    {
-      id: 'student-3',
-      name: 'Dean, Xavier',
-      family: 'Dean',
-      email: '',
-      mobilePhone: '',
-      homePhone: '',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      enrollmentId: 'ST2024003',
-      grade: '10',
-      classes: ['class-1'],
-      overallGrade: 91,
-      attendance: 97,
-      assignments: { completed: 9, total: 10 },
-      status: 'active',
-      type: 'Child'
-    },
-    {
-      id: 'student-4',
-      name: 'Roach, Tait',
-      family: 'Roach',
-      email: '',
-      mobilePhone: '0490670458',
-      homePhone: '',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-      enrollmentId: 'ST2024004',
-      grade: '11',
-      classes: ['class-2'],
-      overallGrade: 79,
-      attendance: 86,
-      assignments: { completed: 6, total: 8 },
-      status: 'active',
-      type: 'Child'
-    },
-    {
-      id: 'student-5',
-      name: 'Song, Sophia',
-      family: 'Song',
-      email: 'sophiasonghi@gmail.com',
-      mobilePhone: '+61 416 526 598',
-      homePhone: '',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
-      enrollmentId: 'ST2024005',
-      grade: '12',
-      classes: ['class-2'],
-      overallGrade: 94,
-      attendance: 98,
-      assignments: { completed: 10, total: 10 },
-      status: 'active',
-      type: 'Child'
-    },
-    {
-      id: 'student-6',
-      name: 'Sutton, Ethan',
-      family: 'Sutton',
-      email: '',
-      mobilePhone: '',
-      homePhone: '',
-      avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face',
-      enrollmentId: 'ST2024006',
-      grade: '10',
-      classes: ['class-1'],
-      overallGrade: 76,
-      attendance: 82,
-      assignments: { completed: 5, total: 8 },
-      status: 'warning',
-      type: 'Child'
-    }
-  ]);
+  // Fetch students and classes from API
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const [studentsResponse, classesData] = await Promise.all([
+          tutorApi.getStudents({ per_page: 100 }), // Get all students
+          tutorApi.getClasses(),
+        ]);
+
+        console.log('Students response from API:', studentsResponse);
+        
+        // Handle paginated response - getStudents returns array directly, but check if it's wrapped
+        let studentsList: any[] = [];
+        if (Array.isArray(studentsResponse)) {
+          studentsList = studentsResponse;
+        } else if (studentsResponse?.data && Array.isArray(studentsResponse.data)) {
+          studentsList = studentsResponse.data;
+        }
+        
+        console.log('Students list to map:', studentsList);
+        const mappedStudents: Student[] = studentsList.map((student: any) => {
+          const userName = student.user?.name || '';
+          const nameParts = userName.split(' ');
+          const lastName = nameParts[nameParts.length - 1] || '';
+          const firstName = nameParts.slice(0, -1).join(' ') || lastName;
+          const fullName = lastName ? `${lastName}, ${firstName}` : userName;
+
+          // Determine status based on overall_grade
+          let status: 'active' | 'inactive' | 'warning' = 'active';
+          if (student.overall_grade !== undefined && student.overall_grade !== null) {
+            if (student.overall_grade < 70) {
+              status = 'warning';
+            } else if (student.overall_grade >= 70) {
+              status = 'active';
+            }
+          }
+
+          return {
+            id: String(student.id),
+            name: fullName || `Student ${student.id}`,
+            family: lastName || '',
+            email: student.user?.email || '',
+            mobilePhone: student.user?.phone || '',
+            homePhone: student.emergency_contact_phone || '',
+            avatar: student.user?.avatar || '',
+            enrollmentId: student.enrollment_id || `ST${student.id}`,
+            grade: student.grade || '',
+            classes: [], // Can be populated from class relationships if needed
+            overallGrade: (student.overall_grade !== null && student.overall_grade !== undefined && !isNaN(Number(student.overall_grade))) 
+              ? Number(student.overall_grade) 
+              : 0,
+            attendance: 0, // Can be calculated from attendance records if available
+            assignments: {
+              completed: student.completed_assignments || 0,
+              total: student.total_assignments || 0,
+            },
+            status: status,
+            type: student.user?.date_of_birth ? 'Child' : 'Adult',
+          };
+        });
+
+        console.log('Mapped students:', mappedStudents);
+        console.log('Students with grades:', mappedStudents.filter(s => s.overallGrade > 0));
+        console.log('Overall grades:', mappedStudents.map(s => ({ id: s.id, name: s.name, grade: s.overallGrade })));
+        setStudents(mappedStudents);
+        setMyClasses(classesData || []);
+      } catch (error) {
+        console.error('Failed to load students:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load students data',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [toast]);
 
   const getStatusColor = (status: Student['status']) => {
     switch (status) {
@@ -171,31 +165,93 @@ export default function TutorStudents() {
                          student.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          student.enrollmentId.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesClass = selectedClass === 'all' || student.classes.includes(selectedClass);
+    // For class filter, we'll need to check if student is enrolled in the selected class
+    // For now, if 'all' is selected, show all students
+    const matchesClass = selectedClass === 'all' || true; // TODO: Implement class filtering when class-student relationship is available
+    
     const matchesStatus = statusFilter === 'all' || student.status === statusFilter;
 
     return matchesSearch && matchesClass && matchesStatus;
   });
 
-  const handleSendMessage = (studentName: string) => {
-    toast({
-      title: "Message Sent",
-      description: `Message sent to ${studentName}`,
-    });
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedClass, statusFilter]);
+
+  const handleViewProgress = (student: Student) => {
+    setSelectedStudent(student);
+    setShowProgressModal(true);
   };
 
-  const handleViewProgress = (studentName: string) => {
-    toast({
-      title: "Progress Report",
-      description: `Opening detailed progress for ${studentName}`,
-    });
+  const handleViewAssignments = (student: Student) => {
+    setSelectedStudent(student);
+    setShowAssignmentsModal(true);
   };
+
+  const handleRemoveStudent = (student: Student) => {
+    // Get class IDs from student's classes or from myClasses
+    const classIds = myClasses.map(c => Number(c.id));
+    setStudentToRemove({
+      studentId: student.id,
+      studentName: student.name,
+      classIds: classIds
+    });
+    setShowRemoveDialog(true);
+  };
+
+  const confirmRemoveStudent = async () => {
+    if (!studentToRemove) return;
+
+    try {
+      setIsRemoving(true);
+      // Remove student from all classes
+      await Promise.all(
+        studentToRemove.classIds.map(classId =>
+          tutorApi.removeStudentFromClass(Number(studentToRemove.studentId), classId)
+        )
+      );
+
+      // Remove student from local state
+      setStudents(prev => prev.filter(s => s.id !== studentToRemove.studentId));
+
+      toast({
+        title: "Student Removed",
+        description: `${studentToRemove.studentName} has been removed from your classes.`,
+      });
+
+      setShowRemoveDialog(false);
+      setStudentToRemove(null);
+    } catch (error: any) {
+      console.error('Failed to remove student:', error);
+      toast({
+        title: "Error",
+        description: error?.response?.data?.message || "Failed to remove student. Please try again.",
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRemoving(false);
+    }
+  };
+
+  // Calculate pagination
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedStudents = filteredStudents.slice(startIndex, endIndex);
+
+  // Calculate stats with proper handling for empty data
+  const studentsWithGrades = students.filter(s => s.overallGrade !== null && s.overallGrade !== undefined && s.overallGrade > 0 && !isNaN(s.overallGrade));
+  const avgGrade = studentsWithGrades.length > 0
+    ? Math.round(studentsWithGrades.reduce((acc, s) => acc + s.overallGrade, 0) / studentsWithGrades.length)
+    : 0;
+  
 
   const stats = {
     totalStudents: students.length,
     activeStudents: students.filter(s => s.status === 'active').length,
     warningStudents: students.filter(s => s.status === 'warning').length,
-    avgGrade: Math.round(students.reduce((acc, s) => acc + s.overallGrade, 0) / students.length),
+    avgGrade: avgGrade,
   };
 
   return (
@@ -243,20 +299,14 @@ export default function TutorStudents() {
             <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${getGradeColor(stats.avgGrade)}`}>
-              {stats.avgGrade}%
+            <div className={`text-2xl font-bold ${stats.avgGrade > 0 ? getGradeColor(stats.avgGrade) : 'text-muted-foreground'}`}>
+              {stats.avgGrade > 0 ? `${stats.avgGrade}%` : 'N/A'}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="list" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="list">Student List</TabsTrigger>
-          <TabsTrigger value="performance">Performance Overview</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="list" className="space-y-4">
+      <div className="space-y-4">
           {/* Filters and Actions */}
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex-1 min-w-[200px]">
@@ -292,34 +342,6 @@ export default function TutorStudents() {
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
-            <Dialog open={isAddStudentOpen} onOpenChange={setIsAddStudentOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Student
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Student</DialogTitle>
-                  <DialogDescription>
-                    Add a new student to your class roster
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="text-sm text-muted-foreground">
-                    Student addition form would go here...
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddStudentOpen(false)}>Cancel</Button>
-                  <Button onClick={() => {
-                    toast({ title: 'Student Added', description: 'New student has been added successfully.' });
-                    setIsAddStudentOpen(false);
-                  }}>Add Student</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </div>
 
           {/* Students Table View - Compact and Scrollable */}
@@ -327,37 +349,42 @@ export default function TutorStudents() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Assigned Students ({filteredStudents.length})</CardTitle>
+                  <CardTitle>Assigned Students ({students.length})</CardTitle>
                   <CardDescription>
-                    Manage your class roster. {filteredStudents.length >= 40 && 'Use search and filters to find specific students.'}
+                    Manage your class roster. Showing {paginatedStudents.length} of {filteredStudents.length} students.
                   </CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border max-h-[600px] overflow-y-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-background z-10">
-                    <TableRow>
-                      <TableHead className="w-[200px]">Student (Family)</TableHead>
-                      <TableHead className="w-[200px]">Email</TableHead>
-                      <TableHead className="w-[120px]">Mobile Phone</TableHead>
-                      <TableHead className="w-[120px]">Home Phone</TableHead>
-                      <TableHead className="w-[100px]">Type</TableHead>
-                      <TableHead className="w-[100px]">Status</TableHead>
-                      <TableHead className="w-[80px]">Grade</TableHead>
-                      <TableHead className="w-[100px] text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredStudents.length === 0 ? (
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="rounded-md border max-h-[600px] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                          No students found matching your filters.
-                        </TableCell>
+                        <TableHead className="w-[200px]">Student (Family)</TableHead>
+                        <TableHead className="w-[200px]">Email</TableHead>
+                        <TableHead className="w-[120px]">Mobile Phone</TableHead>
+                        <TableHead className="w-[120px]">Home Phone</TableHead>
+                        <TableHead className="w-[100px]">Type</TableHead>
+                        <TableHead className="w-[100px]">Status</TableHead>
+                        <TableHead className="w-[80px]">Grade</TableHead>
+                        <TableHead className="w-[100px] text-right">Actions</TableHead>
                       </TableRow>
-                    ) : (
-                      filteredStudents.map((student) => (
+                    </TableHeader>
+                    <TableBody>
+                      {filteredStudents.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                            {students.length === 0 ? 'No students assigned to you yet.' : 'No students found matching your filters.'}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        paginatedStudents.map((student) => (
                         <TableRow key={student.id}>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
@@ -423,21 +450,20 @@ export default function TutorStudents() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => handleViewProgress(student.name)}>
+                                <DropdownMenuItem onClick={() => handleViewProgress(student)}>
                                   <TrendingUp className="mr-2 h-4 w-4" />
                                   View Progress
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleSendMessage(student.name)}>
-                                  <MessageSquare className="mr-2 h-4 w-4" />
-                                  Send Message
-                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewAssignments(student)}>
                                   <FileText className="mr-2 h-4 w-4" />
                                   View Assignments
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive">
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => handleRemoveStudent(student)}
+                                >
                                   <X className="mr-2 h-4 w-4" />
                                   Remove Student
                                 </DropdownMenuItem>
@@ -445,82 +471,149 @@ export default function TutorStudents() {
                             </DropdownMenu>
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="performance" className="space-y-4">
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Performers</CardTitle>
-                <CardDescription>Students with highest grades</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {students
-                  .sort((a, b) => b.overallGrade - a.overallGrade)
-                  .slice(0, 3)
-                  .map((student, index) => (
-                    <div key={student.id} className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                        {index + 1}
-                      </div>
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={student.avatar} alt={student.name} />
-                        <AvatarFallback className="text-xs">
-                          {student.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{student.name}</p>
-                        <p className="text-xs text-muted-foreground">Grade {student.grade}</p>
-                      </div>
-                      <div className={`text-sm font-medium ${getGradeColor(student.overallGrade)}`}>
-                        {student.overallGrade}%
-                      </div>
-                    </div>
-                  ))}
-              </CardContent>
-            </Card>
+          {/* Pagination */}
+          {!isLoading && totalPages > 1 && filteredStudents.length > 0 && (
+            <div className="flex items-center justify-center mt-4">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage > 1) setCurrentPage(prev => prev - 1);
+                      }}
+                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      href="#"
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                    // For small page counts, show all pages
+                    if (totalPages <= 7) {
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(page);
+                            }}
+                            isActive={currentPage === page}
+                            className="cursor-pointer"
+                            href="#"
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    }
+                    
+                    // For larger page counts, show first, last, current, and pages around current
+                    if (
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    ) {
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(page);
+                            }}
+                            isActive={currentPage === page}
+                            className="cursor-pointer"
+                            href="#"
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    } else if (page === currentPage - 2 || page === currentPage + 2) {
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      );
+                    }
+                    return null;
+                  })}
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage < totalPages) setCurrentPage(prev => prev + 1);
+                      }}
+                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      href="#"
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
+      </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Need Attention</CardTitle>
-                <CardDescription>Students requiring support</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {students
-                  .filter(s => s.status === 'warning' || s.overallGrade < 75)
-                  .slice(0, 3)
-                  .map((student) => (
-                    <div key={student.id} className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={student.avatar} alt={student.name} />
-                        <AvatarFallback className="text-xs">
-                          {student.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{student.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {student.assignments.completed}/{student.assignments.total} assignments • {student.attendance}% attendance
-                        </p>
-                      </div>
-                      <Badge className={getStatusColor(student.status)}>
-                        {student.status}
-                      </Badge>
-                    </div>
-                  ))}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+      {/* Modals */}
+      {selectedStudent && (
+        <>
+          <StudentProgressModal
+            studentId={selectedStudent.id}
+            studentName={selectedStudent.name}
+            isOpen={showProgressModal}
+            onClose={() => {
+              setShowProgressModal(false);
+              setSelectedStudent(null);
+            }}
+          />
+          <StudentAssignmentsModal
+            studentId={selectedStudent.id}
+            studentName={selectedStudent.name}
+            isOpen={showAssignmentsModal}
+            onClose={() => {
+              setShowAssignmentsModal(false);
+              setSelectedStudent(null);
+            }}
+          />
+        </>
+      )}
+
+      {/* Remove Student Confirmation Dialog */}
+      <AlertDialog open={showRemoveDialog} onOpenChange={setShowRemoveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Student</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove {studentToRemove?.studentName} from your classes? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemoveStudent}
+              disabled={isRemoving}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isRemoving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Removing...
+                </>
+              ) : (
+                'Remove'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

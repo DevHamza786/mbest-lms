@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -7,91 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { useParentStore } from '@/lib/store/parentStore';
+import { parentApi } from '@/lib/api';
 import { Search, FileText, Calendar, Clock, User, BookOpen, Eye, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Session } from '@/lib/types/session';
-
-// Mock lesson history data - filtered by active child
-const getMockLessonHistory = (childId: string): Session[] => {
-  const allLessons: Session[] = [
-    {
-      id: '1',
-      date: '2025-11-22',
-      startTime: '09:30',
-      endTime: '10:30',
-      teacherId: 'tutor-1',
-      teacherName: 'Vu Dinh',
-      studentIds: ['student-1'],
-      studentNames: ['Xavier Dean'],
-      subject: 'Mathematics',
-      yearLevel: '10',
-      location: 'home',
-      sessionType: '1:1',
-      status: 'completed',
-      lessonNote: 'Covered quadratic equations and factorization. Student showed good understanding of basic concepts.',
-      topicsTaught: 'Quadratic Equations, Factorization, Solving by completing the square',
-      homeworkResources: 'Worksheet pages 12-15, Practice problems 1-10',
-      studentNotes: [{
-        studentId: 'student-1',
-        studentName: 'Xavier Dean',
-        behaviorIssues: '',
-        homeworkCompleted: true,
-        homeworkNotes: 'Completed all assigned problems',
-        privateNotes: 'Student is progressing well. Continue with advanced problems next session.'
-      }],
-      attendanceMarked: true,
-      readyForInvoicing: true,
-      createdAt: '2025-11-20T10:00:00Z',
-      updatedAt: '2025-11-22T10:30:00Z',
-    },
-    {
-      id: '2',
-      date: '2025-11-20',
-      startTime: '04:00',
-      endTime: '05:00',
-      teacherId: 'tutor-1',
-      teacherName: 'Vu Dinh',
-      studentIds: ['student-2', 'student-3'],
-      studentNames: ['Sampaguita Anoa', 'Rostov Percy'],
-      subject: 'English',
-      yearLevel: '11',
-      location: 'centre',
-      sessionType: 'group',
-      status: 'completed',
-      lessonNote: 'Group discussion on essay writing techniques. All students participated actively.',
-      topicsTaught: 'Essay Structure, Thesis Statements, Paragraph Development',
-      homeworkResources: 'Essay writing template, Reading assignment pages 45-50',
-      studentNotes: [
-        {
-          studentId: 'student-2',
-          studentName: 'Sampaguita Anoa',
-          behaviorIssues: '',
-          homeworkCompleted: true,
-          homeworkNotes: 'Submitted essay draft on time',
-          privateNotes: 'Excellent participation. Strong analytical skills.'
-        },
-        {
-          studentId: 'student-3',
-          studentName: 'Rostov Percy',
-          behaviorIssues: 'Did not complete homework from previous session',
-          homeworkCompleted: false,
-          homeworkNotes: 'Missing essay draft. Needs to catch up.',
-          privateNotes: 'Student needs encouragement. Please follow up at home.'
-        }
-      ],
-      attendanceMarked: true,
-      readyForInvoicing: true,
-      createdAt: '2025-11-18T10:00:00Z',
-      updatedAt: '2025-11-20T17:00:00Z',
-    },
-  ];
-
-  // Filter lessons for the active child
-  return allLessons.filter(lesson => 
-    lesson.studentIds.includes(childId) || 
-    lesson.studentNames.some(name => name.toLowerCase().includes(childId.toLowerCase()))
-  );
-};
 
 export default function ParentLessonHistory() {
   const { activeChildId, getActiveChild } = useParentStore();
@@ -100,8 +19,65 @@ export default function ParentLessonHistory() {
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [lessonHistory, setLessonHistory] = useState<Session[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const lessonHistory = activeChildId ? getMockLessonHistory(activeChildId) : [];
+  // Load lesson history from API
+  useEffect(() => {
+    if (!activeChildId) {
+      setLessonHistory([]);
+      return;
+    }
+
+    const loadLessonHistory = async () => {
+      try {
+        setIsLoading(true);
+        const sessionsData = await parentApi.getChildSessions(Number(activeChildId));
+        
+        // Map API response to Session format
+        const mappedSessions: Session[] = sessionsData.map(s => ({
+          id: String(s.id),
+          date: s.date,
+          startTime: s.start_time,
+          endTime: s.end_time,
+          teacherId: String(s.teacher.id),
+          teacherName: s.teacher.user.name,
+          studentIds: [String(activeChildId)],
+          studentNames: [activeChild?.name || ''],
+          subject: s.subject,
+          yearLevel: s.year_level || '',
+          location: s.location,
+          sessionType: s.session_type,
+          status: s.status,
+          lessonNote: s.lesson_note,
+          topicsTaught: s.topics_taught,
+          homeworkResources: s.homework_resources,
+          studentNotes: s.student_notes?.map(note => ({
+            studentId: String(note.student_id),
+            studentName: activeChild?.name || '',
+            behaviorIssues: '',
+            homeworkCompleted: note.homework_completed,
+            homeworkNotes: '',
+            privateNotes: note.private_notes || '',
+          })) || [],
+          attendanceMarked: true,
+          readyForInvoicing: s.status === 'completed',
+          createdAt: s.date,
+          updatedAt: s.date,
+        }));
+        
+        setLessonHistory(mappedSessions);
+      } catch (error) {
+        console.error('Failed to load lesson history:', error);
+        setLessonHistory([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLessonHistory();
+  }, [activeChildId, activeChild?.name]);
+
   const allSubjects = Array.from(new Set(lessonHistory.map(s => s.subject))).sort();
 
   const filteredHistory = lessonHistory.filter(session => {

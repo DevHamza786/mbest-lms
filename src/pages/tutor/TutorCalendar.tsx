@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
-import { ChevronLeft, ChevronRight, Plus, Clock, MapPin, Video, Users, ChevronDown, FileText, List, Calendar as CalendarIcon, MapPin as MapPinIcon, XCircle, X, AlertCircle, CheckCircle2, BookOpen, User, DollarSign, Edit, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Clock, MapPin, Video, Users, ChevronDown, FileText, List, Calendar as CalendarIcon, MapPin as MapPinIcon, XCircle, X, AlertCircle, CheckCircle2, BookOpen, User, DollarSign, Edit, Download, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +18,9 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 import { LessonNoteModal } from '@/components/modals/LessonNoteModal';
 import { InvoicePreviewModal } from '@/components/modals/InvoicePreviewModal';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useSession } from '@/lib/store/authStore';
 import { generateTutorInvoicePDF } from '@/lib/utils/invoicePdf';
+import { tutorApi } from '@/lib/api';
 
 interface LessonEvent {
   id: string;
@@ -44,6 +46,7 @@ interface LessonEvent {
 export default function TutorCalendar() {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const session = useSession();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isAddLessonOpen, setIsAddLessonOpen] = useState(false);
@@ -58,51 +61,122 @@ export default function TutorCalendar() {
   const [cancellationReason, setCancellationReason] = useState('');
   const [unavailableReason, setUnavailableReason] = useState('');
   const [generatedInvoices, setGeneratedInvoices] = useState<Record<string, any>>({});
-  const [lessons, setLessons] = useState<Record<string, LessonEvent[]>>({
-    '2025-01-15': [
-      { id: '1', studentNames: ['Sampoorna Arora'], lessonTitle: 'Alcatraz', time: '04:00 PM', duration: 1, mode: 'online', status: 'scheduled', color: '#2563eb', tutorName: 'Vu Dinh', location: 'Online', subject: 'Mathematics', wage: 45.00 },
-      { id: '2', studentNames: ['Xavier Dean'], lessonTitle: 'Mathematics', time: '04:30 PM', duration: 1.5, mode: 'online', status: 'scheduled', color: '#2563eb', tutorName: 'Vu Dinh', location: 'Online', subject: 'Mathematics', wage: 67.50 },
-      { id: '3', studentNames: ['Ethan Sutton'], lessonTitle: 'Physics', time: '06:00 PM', duration: 1, mode: 'offline', status: 'scheduled', color: '#2563eb', tutorName: 'Vu Dinh', location: 'Student\'s Home', subject: 'Physics', wage: 45.00 },
-      { id: '4', studentNames: ['Natasha Askary'], lessonTitle: 'English', time: '06:30 PM', duration: 1, mode: 'online', status: 'scheduled', color: '#2563eb', tutorName: 'Vu Dinh', location: 'Online', subject: 'English', wage: 45.00 },
-    ],
-    '2025-01-16': [
-      { id: '5', studentNames: ['Rhianna Georgiou'], lessonTitle: 'Chemistry', time: '04:30 PM', duration: 1, mode: 'offline', status: 'scheduled', color: '#2563eb', tutorName: 'Vu Dinh', location: 'Student\'s Home', subject: 'Chemistry', wage: 45.00 },
-      { id: '6', studentNames: ['Sophia Song'], lessonTitle: 'Mathematics', time: '06:00 PM', duration: 1, mode: 'online', status: 'scheduled', color: '#2563eb', tutorName: 'Vu Dinh', location: 'Online', subject: 'Mathematics', wage: 45.00 },
-    ],
-    '2025-01-17': [
-      { id: '7', studentNames: ['Xavier Dean'], lessonTitle: 'Mathematics', time: '09:30 AM', duration: 1.5, mode: 'online', status: 'scheduled', color: '#2563eb', tutorName: 'Vu Dinh', location: 'Online', subject: 'Mathematics', wage: 67.50 },
-    ],
-  });
+  const [lessons, setLessons] = useState<Record<string, LessonEvent[]>>({});
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [availableStudents, setAvailableStudents] = useState<any[]>([]);
 
   const [newLesson, setNewLesson] = useState({
-    students: [] as string[], // Changed to array
-    lessonTitle: '',
+    studentIds: [] as number[], // Student IDs from API
+    subject: '',
     date: '',
-    time: '',
+    startTime: '',
+    endTime: '',
     duration: '1',
-    mode: 'online' as 'online' | 'offline',
+    location: 'online' as 'online' | 'home' | 'centre',
+    yearLevel: '',
+    classId: null as number | null,
   });
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  useEffect(() => {
-    const stored = typeof window !== 'undefined' ? window.localStorage.getItem('tutor-lessons') : null;
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Record<string, LessonEvent[]>;
-        setLessons(prev => ({ ...prev, ...parsed }));
-      } catch {
-        // ignore parse errors
-      }
-    }
-  }, []);
+  // Convert API session to LessonEvent
+  const mapSessionToLesson = (session: any): LessonEvent => {
+    const startTime = new Date(`2000-01-01T${session.start_time}`);
+    const endTime = new Date(`2000-01-01T${session.end_time}`);
+    const duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60); // Convert to hours
+    
+    // Format time as HH:MM AM/PM
+    const hours = startTime.getHours();
+    const minutes = startTime.getMinutes();
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+    const formattedTime = `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+    
+    // Get student names
+    const studentNames = session.students?.map((s: any) => s.user?.name || `Student ${s.id}`) || [];
+    
+    // Map status
+    let status: 'scheduled' | 'completed' | 'cancelled' | 'unavailable' = 'scheduled';
+    if (session.status === 'completed') status = 'completed';
+    else if (session.status === 'cancelled') status = 'cancelled';
+    else if (session.status === 'unavailable') status = 'unavailable';
+    
+    // Determine mode from location
+    const mode: 'online' | 'offline' = session.location === 'online' ? 'online' : 'offline';
+    
+    return {
+      id: String(session.id),
+      studentNames,
+      lessonTitle: session.subject,
+      time: formattedTime,
+      duration,
+      mode,
+      status,
+      color: session.color || getLessonColor({ status, time: formattedTime }),
+      location: session.location === 'online' ? 'Online' : session.location === 'home' ? 'Student\'s Home' : session.location === 'centre' ? 'Centre' : session.location,
+      subject: session.subject,
+      lessonNote: session.lesson_note,
+      topicsTaught: session.topics_taught,
+      homeworkResources: session.homework_resources,
+      tutorName: session?.name || 'Current Tutor',
+      invoiceGenerated: session.ready_for_invoicing || false, // Check if invoice has been generated
+    };
+  };
 
+  // Load sessions for the current month
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('tutor-lessons', JSON.stringify(lessons));
-  }, [lessons]);
+    const loadSessions = async () => {
+      try {
+        setIsLoadingSessions(true);
+        const monthStart = startOfMonth(currentDate);
+        const monthEnd = endOfMonth(currentDate);
+        
+        const sessions = await tutorApi.getSessions({
+          date_from: format(monthStart, 'yyyy-MM-dd'),
+          date_to: format(monthEnd, 'yyyy-MM-dd'),
+        });
+        
+        // Group sessions by date
+        const lessonsByDate: Record<string, LessonEvent[]> = {};
+        sessions.forEach(session => {
+          const dateKey = format(new Date(session.date), 'yyyy-MM-dd');
+          if (!lessonsByDate[dateKey]) {
+            lessonsByDate[dateKey] = [];
+          }
+          lessonsByDate[dateKey].push(mapSessionToLesson(session));
+        });
+        
+        setLessons(lessonsByDate);
+      } catch (error) {
+        console.error('Failed to load sessions:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load calendar sessions',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoadingSessions(false);
+      }
+    };
+
+    loadSessions();
+  }, [currentDate, toast]);
+
+  // Load available students for the "Add Lesson" dialog
+  useEffect(() => {
+    const loadStudents = async () => {
+      try {
+        const students = await tutorApi.getStudents();
+        setAvailableStudents(students);
+      } catch (error) {
+        console.error('Failed to load students:', error);
+      }
+    };
+
+    loadStudents();
+  }, []);
 
   const getDayLessons = (day: Date) => {
     const dateKey = format(day, 'yyyy-MM-dd');
@@ -112,35 +186,19 @@ export default function TutorCalendar() {
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
-  const getStudentDisplayName = (value: string) => {
-    switch (value) {
-      case 'sampoorna':
-        return 'Sampoorna Arora';
-      case 'xavier':
-        return 'Xavier Dean';
-      case 'ethan':
-        return 'Ethan Sutton';
-      case 'natasha':
-        return 'Natasha Askary';
-      case 'sophia':
-        return 'Sophia Song';
-      default:
-        return value;
-    }
-  };
 
   const getLessonColor = (lesson: LessonEvent | { status: string; time?: string }) => {
     if (lesson.status === 'cancelled') {
-      return '#dc2626'; // Red for cancelled
+      return 'hsl(0, 84%, 60%)'; // Destructive red for cancelled
     }
     if (lesson.status === 'unavailable') {
-      return '#eab308'; // Yellow for unavailable
+      return 'hsl(45, 93%, 47%)'; // Warning yellow for unavailable
     }
     if (lesson.status === 'completed') {
-      return '#16a34a'; // Green for completed
+      return 'hsl(142, 70%, 50%)'; // Vibrant green (secondary) for completed
     }
-    // Default scheduled color
-    return '#2563eb'; // Blue for scheduled
+    // Default scheduled color - Dark deep blue (primary)
+    return 'hsl(220, 80%, 30%)'; // Primary dark deep blue for scheduled
   };
 
   const handleCancelLesson = (lesson: LessonEvent) => {
@@ -148,7 +206,7 @@ export default function TutorCalendar() {
     setIsCancelLessonOpen(true);
   };
 
-  const confirmCancelLesson = () => {
+  const confirmCancelLesson = async () => {
     if (!selectedLesson || !cancellationReason.trim()) {
       toast({
         title: "Reason Required",
@@ -158,23 +216,40 @@ export default function TutorCalendar() {
       return;
     }
 
-    const dateKey = Object.keys(lessons).find(key => 
-      lessons[key].some(l => l.id === selectedLesson.id)
-    );
+    try {
+      // Update session status to cancelled via API
+      await tutorApi.updateSession(Number(selectedLesson.id), {
+        status: 'cancelled',
+      });
 
-    if (dateKey) {
-      setLessons(prev => ({
-        ...prev,
-        [dateKey]: prev[dateKey].map(l =>
-          l.id === selectedLesson.id
-            ? { ...l, status: 'cancelled' as const, cancellationReason, color: '#dc2626' }
-            : l
-        ),
-      }));
+      // Reload sessions
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(currentDate);
+      const sessions = await tutorApi.getSessions({
+        date_from: format(monthStart, 'yyyy-MM-dd'),
+        date_to: format(monthEnd, 'yyyy-MM-dd'),
+      });
+
+      const lessonsByDate: Record<string, LessonEvent[]> = {};
+      sessions.forEach(session => {
+        const dateKey = format(new Date(session.date), 'yyyy-MM-dd');
+        if (!lessonsByDate[dateKey]) {
+          lessonsByDate[dateKey] = [];
+        }
+        lessonsByDate[dateKey].push(mapSessionToLesson(session));
+      });
+      setLessons(lessonsByDate);
 
       toast({
         title: "Lesson Cancelled",
         description: "Lesson has been cancelled successfully.",
+      });
+    } catch (error) {
+      console.error('Failed to cancel lesson:', error);
+      toast({
+        title: "Error",
+        description: "Failed to cancel lesson. Please try again.",
+        variant: "destructive",
       });
     }
 
@@ -188,7 +263,7 @@ export default function TutorCalendar() {
     setIsUnavailableOpen(true);
   };
 
-  const confirmUnavailable = () => {
+  const confirmUnavailable = async () => {
     if (!selectedLesson || !unavailableReason.trim()) {
       toast({
         title: "Reason Required",
@@ -198,23 +273,40 @@ export default function TutorCalendar() {
       return;
     }
 
-    const dateKey = Object.keys(lessons).find(key => 
-      lessons[key].some(l => l.id === selectedLesson.id)
-    );
+    try {
+      // Update session status to unavailable via API
+      await tutorApi.updateSession(Number(selectedLesson.id), {
+        status: 'unavailable',
+      });
 
-    if (dateKey) {
-      setLessons(prev => ({
-        ...prev,
-        [dateKey]: prev[dateKey].map(l =>
-          l.id === selectedLesson.id
-            ? { ...l, status: 'unavailable' as const, cancellationReason: unavailableReason, color: '#eab308' }
-            : l
-        ),
-      }));
+      // Reload sessions
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(currentDate);
+      const sessions = await tutorApi.getSessions({
+        date_from: format(monthStart, 'yyyy-MM-dd'),
+        date_to: format(monthEnd, 'yyyy-MM-dd'),
+      });
+
+      const lessonsByDate: Record<string, LessonEvent[]> = {};
+      sessions.forEach(session => {
+        const dateKey = format(new Date(session.date), 'yyyy-MM-dd');
+        if (!lessonsByDate[dateKey]) {
+          lessonsByDate[dateKey] = [];
+        }
+        lessonsByDate[dateKey].push(mapSessionToLesson(session));
+      });
+      setLessons(lessonsByDate);
 
       toast({
         title: "Marked as Unavailable",
         description: "Lesson has been marked as unavailable.",
+      });
+    } catch (error) {
+      console.error('Failed to mark lesson as unavailable:', error);
+      toast({
+        title: "Error",
+        description: "Failed to mark lesson as unavailable. Please try again.",
+        variant: "destructive",
       });
     }
 
@@ -228,34 +320,50 @@ export default function TutorCalendar() {
     setIsLessonNoteOpen(true);
   };
 
-  const handleSaveLessonNote = (sessionId: string, lessonNote: string, topicsTaught: string, homeworkResources: string, studentNotes: any[]) => {
+  const handleSaveLessonNote = async (sessionId: string, lessonNote: string, topicsTaught: string, homeworkResources: string, studentNotes: any[]) => {
     if (!selectedLesson) return;
 
-    const dateKey = Object.keys(lessons).find(key => 
-      lessons[key].some(l => l.id === selectedLesson.id)
-    );
+    try {
+      // Add notes and mark as completed via API
+      await tutorApi.addSessionNotes(Number(selectedLesson.id), {
+        lesson_note: lessonNote,
+        topics_taught: topicsTaught,
+        homework_resources: homeworkResources,
+      });
 
-    if (dateKey) {
-      setLessons(prev => ({
-        ...prev,
-        [dateKey]: prev[dateKey].map(l =>
-          l.id === selectedLesson.id
-            ? { 
-                ...l, 
-                status: 'completed' as const, 
-                lessonNote,
-                topicsTaught,
-                homeworkResources,
-                studentNotes,
-                color: '#16a34a'
-              }
-            : l
-        ),
-      }));
+      // Update status to completed
+      await tutorApi.updateSession(Number(selectedLesson.id), {
+        status: 'completed',
+      });
+
+      // Reload sessions
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(currentDate);
+      const sessions = await tutorApi.getSessions({
+        date_from: format(monthStart, 'yyyy-MM-dd'),
+        date_to: format(monthEnd, 'yyyy-MM-dd'),
+      });
+
+      const lessonsByDate: Record<string, LessonEvent[]> = {};
+      sessions.forEach(session => {
+        const dateKey = format(new Date(session.date), 'yyyy-MM-dd');
+        if (!lessonsByDate[dateKey]) {
+          lessonsByDate[dateKey] = [];
+        }
+        lessonsByDate[dateKey].push(mapSessionToLesson(session));
+      });
+      setLessons(lessonsByDate);
 
       toast({
         title: "Lesson Completed",
         description: "Lesson notes have been saved successfully.",
+      });
+    } catch (error) {
+      console.error('Failed to save lesson notes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save lesson notes. Please try again.",
+        variant: "destructive",
       });
     }
 
@@ -268,75 +376,201 @@ export default function TutorCalendar() {
     setIsInvoicePreviewOpen(true);
   };
 
-  const handleConfirmInvoiceGeneration = (invoiceData: any) => {
+  const handleConfirmInvoiceGeneration = async (invoiceData: any) => {
     if (!selectedLesson) return;
 
-    const dateKey = Object.keys(lessons).find(key => 
-      lessons[key].some(l => l.id === selectedLesson.id)
-    );
+    try {
+      // Save invoice to database
+      await tutorApi.createInvoice({
+        session_id: Number(selectedLesson.id),
+        invoice_number: invoiceData.invoiceNumber,
+        issue_date: invoiceData.date,
+        period_start: invoiceData.periodStart,
+        period_end: invoiceData.periodEnd,
+        tutor_address: invoiceData.tutorAddress,
+        items: invoiceData.items.map((item: any) => ({
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.rate,
+          amount: item.amount,
+        })),
+        total_amount: invoiceData.totalAmount,
+        notes: invoiceData.notes || '',
+      });
 
-    if (dateKey) {
-      setLessons(prev => ({
-        ...prev,
-        [dateKey]: prev[dateKey].map(l =>
-          l.id === selectedLesson.id
-            ? { ...l, invoiceGenerated: true }
-            : l
-        ),
-      }));
+      const dateKey = Object.keys(lessons).find(key => 
+        lessons[key].some(l => l.id === selectedLesson.id)
+      );
 
-      // Store invoice data
-      setGeneratedInvoices(prev => ({
-        ...prev,
-        [selectedLesson.id]: invoiceData,
-      }));
+      if (dateKey) {
+        setLessons(prev => ({
+          ...prev,
+          [dateKey]: prev[dateKey].map(l =>
+            l.id === selectedLesson.id
+              ? { ...l, invoiceGenerated: true }
+              : l
+          ),
+        }));
+
+        // Store invoice data
+        setGeneratedInvoices(prev => ({
+          ...prev,
+          [selectedLesson.id]: invoiceData,
+        }));
+      }
 
       toast({
         title: "Invoice Generated",
-        description: "Invoice has been generated and will be visible to admin only.",
+        description: "Invoice has been generated and saved successfully.",
+      });
+
+      setIsInvoicePreviewOpen(false);
+      setSelectedLesson(null);
+    } catch (error) {
+      console.error('Failed to generate invoice:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate invoice. Please try again.",
+        variant: "destructive",
       });
     }
-
-    setIsInvoicePreviewOpen(false);
-    setSelectedLesson(null);
   };
 
-  const handleViewInvoice = (lesson: LessonEvent) => {
+  const handleViewInvoice = async (lesson: LessonEvent) => {
     setSelectedLesson(lesson);
+    
+    try {
+      // Fetch invoice from API using session_id
+      const invoicesResponse = await tutorApi.getInvoices({
+        session_id: lesson.id,
+      });
+      
+      // Check if invoices.data exists (array) or if invoices is already an array
+      const invoices = Array.isArray(invoicesResponse) ? invoicesResponse : (invoicesResponse?.data || []);
+      
+      // Find invoice that matches this session (should be only one with session_id filter)
+      const invoice = invoices.find((inv: any) => inv.session_id === Number(lesson.id));
+      
+      if (invoice) {
+        // Convert API invoice to InvoiceData format
+        const invoiceData = {
+          lessonId: lesson.id,
+          invoiceNumber: invoice.invoice_number,
+          date: invoice.issue_date,
+          periodStart: invoice.period_start,
+          periodEnd: invoice.period_end,
+          tutorName: session?.name || 'Tutor',
+          tutorAddress: invoice.tutor_address || '',
+          students: lesson.studentNames,
+          items: invoice.items?.map((item: any) => ({
+            description: item.description,
+            quantity: parseFloat(item.credits) || 0,
+            rate: parseFloat(item.amount) / (parseFloat(item.credits) || 1),
+            amount: parseFloat(item.amount),
+          })) || [],
+          totalAmount: parseFloat(invoice.amount) || 0,
+          notes: invoice.notes || '',
+        };
+        
+        // Store in generatedInvoices for the modal
+        setGeneratedInvoices(prev => ({
+          ...prev,
+          [lesson.id]: invoiceData,
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch invoice:', error);
+      // Continue to show modal even if fetch fails - it will use generatedInvoices or show default
+    }
+    
     setIsInvoiceViewOpen(true);
   };
 
-  const handleDownloadInvoice = (lesson: LessonEvent) => {
-    const invoiceData = generatedInvoices[lesson.id];
-    
-    // If no invoice data exists, create a basic invoice from lesson data
-    const lessonDate = new Date();
-    const invoiceNumber = invoiceData?.invoiceNumber || `TINV-${Date.now().toString().slice(-6)}`;
-    
+  const handleDownloadInvoice = async (lesson: LessonEvent) => {
     try {
-      generateTutorInvoicePDF({
-        id: lesson.id,
-        invoiceNumber: invoiceNumber,
-        date: invoiceData?.date || lessonDate.toISOString().split('T')[0],
-        periodStart: invoiceData?.periodStart || lessonDate.toISOString().split('T')[0],
-        periodEnd: invoiceData?.periodEnd || lessonDate.toISOString().split('T')[0],
-        status: 'Paid',
-        amount: invoiceData?.totalAmount || lesson.wage || 0,
-        tutorName: lesson.tutorName || 'Vu Dinh',
-        tutorAddress: invoiceData?.tutorAddress || 'Vo One\n16 Tonnyeen St Wetherill Park\nSydney NSW 2164\nAustralia',
-        items: invoiceData?.items || [{
-          description: `${lesson.lessonTitle || 'Lesson'} - ${lesson.studentNames.join(', ')}`,
-          quantity: lesson.duration,
-          rate: (lesson.wage || 0) / lesson.duration,
-          amount: lesson.wage || 0,
-        }],
-        notes: invoiceData?.notes || '',
+      // Fetch invoice from API using session_id
+      const invoicesResponse = await tutorApi.getInvoices({
+        session_id: lesson.id,
       });
+      
+      // Check if invoices.data exists (array) or if invoices is already an array
+      const invoices = Array.isArray(invoicesResponse) ? invoicesResponse : (invoicesResponse?.data || []);
+      
+      // Find invoice that matches this session (should be only one with session_id filter)
+      let invoice = invoices.find((inv: any) => inv.session_id === Number(lesson.id));
+      
+      // If invoice found, use it; otherwise use stored data or create from lesson
+      const invoiceData = generatedInvoices[lesson.id];
+      const lessonDate = new Date();
+      
+      if (invoice) {
+        // Use invoice data from database
+        await generateTutorInvoicePDF({
+          id: String(invoice.id),
+          invoiceNumber: invoice.invoice_number,
+          date: invoice.issue_date,
+          periodStart: invoice.period_start,
+          periodEnd: invoice.period_end,
+          status: invoice.status === 'paid' ? 'Paid' : invoice.status === 'pending' ? 'Pending' : 'Overdue',
+          amount: parseFloat(invoice.amount),
+          tutorName: session?.name || 'Tutor',
+          tutorAddress: invoice.tutor_address || '',
+          items: invoice.items?.map((item: any) => ({
+            description: item.description,
+            quantity: parseFloat(item.credits) || 0,
+            rate: parseFloat(item.amount) / (parseFloat(item.credits) || 1),
+            amount: parseFloat(item.amount),
+          })) || [],
+          notes: invoice.notes || '',
+          due_date: invoice.due_date,
+          currency: invoice.currency,
+          paid_date: invoice.paid_date,
+          payment_method: invoice.payment_method,
+          transaction_id: invoice.transaction_id,
+        });
+      } else if (invoiceData) {
+        // Use stored invoice data
+        await generateTutorInvoicePDF({
+          id: lesson.id,
+          invoiceNumber: invoiceData.invoiceNumber,
+          date: invoiceData.date,
+          periodStart: invoiceData.periodStart,
+          periodEnd: invoiceData.periodEnd,
+          status: 'Pending',
+          amount: invoiceData.totalAmount,
+          tutorName: lesson.tutorName || session?.name || 'Tutor',
+          tutorAddress: invoiceData.tutorAddress || '',
+          items: invoiceData.items || [],
+          notes: invoiceData.notes || '',
+        });
+      } else {
+        // Fallback to lesson data
+        await generateTutorInvoicePDF({
+          id: lesson.id,
+          invoiceNumber: `TINV-${Date.now().toString().slice(-6)}`,
+          date: lessonDate.toISOString().split('T')[0],
+          periodStart: lessonDate.toISOString().split('T')[0],
+          periodEnd: lessonDate.toISOString().split('T')[0],
+          status: 'Pending',
+          amount: lesson.wage || 0,
+          tutorName: lesson.tutorName || session?.name || 'Tutor',
+          tutorAddress: '',
+          items: [{
+            description: `${lesson.subject || lesson.lessonTitle || 'Lesson'} - ${lesson.studentNames.join(', ')}`,
+            quantity: lesson.duration,
+            rate: (lesson.wage || 0) / lesson.duration,
+            amount: lesson.wage || 0,
+          }],
+          notes: '',
+        });
+      }
+      
       toast({
         title: "Download Started",
-        description: `Invoice ${invoiceNumber} is being downloaded...`,
+        description: `Invoice is being downloaded...`,
       });
     } catch (error) {
+      console.error('Failed to download invoice:', error);
       toast({
         title: "Download Failed",
         description: "Failed to generate PDF. Please try again.",
@@ -350,26 +584,70 @@ export default function TutorCalendar() {
     setIsEditLessonOpen(true);
   };
 
-  const handleSaveEditedLesson = () => {
+  const handleSaveEditedLesson = async () => {
     if (!editingLesson) return;
 
-    const dateKey = Object.keys(lessons).find(key => 
-      lessons[key].some(l => l.id === editingLesson.id)
-    );
+    try {
+      // Parse time back to 24h format for API (H:i format without seconds)
+      const parseTimeTo24h = (timeStr: string): string => {
+        if (timeStr.includes('PM') || timeStr.includes('AM')) {
+          const [time, period] = timeStr.split(' ');
+          const [hours, minutes] = time.split(':');
+          let hour24 = parseInt(hours);
+          if (period === 'PM' && hour24 !== 12) hour24 += 12;
+          if (period === 'AM' && hour24 === 12) hour24 = 0;
+          return `${hour24.toString().padStart(2, '0')}:${minutes}`;
+        }
+        // Remove seconds if present, return HH:MM format
+        return timeStr.split(' ')[0].split(':').slice(0, 2).join(':');
+      };
 
-    if (dateKey) {
-      setLessons(prev => ({
-        ...prev,
-        [dateKey]: prev[dateKey].map(l =>
-          l.id === editingLesson.id
-            ? editingLesson
-            : l
-        ),
-      }));
+      const startTime = parseTimeTo24h(editingLesson.time);
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const endHour = startHour + Math.floor(editingLesson.duration);
+      const endMin = startMin + ((editingLesson.duration % 1) * 60);
+      // Format as H:i (HH:MM) without seconds
+      const endTime = `${endHour.toString().padStart(2, '0')}:${Math.floor(endMin).toString().padStart(2, '0')}`;
+
+      // Get the original session to find the date
+      const originalSession = await tutorApi.getSession(Number(editingLesson.id));
+
+      // Update session via API
+      await tutorApi.updateSession(Number(editingLesson.id), {
+        start_time: startTime,
+        end_time: endTime,
+        subject: editingLesson.subject || originalSession.subject,
+        location: editingLesson.mode === 'online' ? 'online' : editingLesson.mode === 'offline' ? 'home' : 'centre',
+      });
+
+      // Reload sessions
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(currentDate);
+      const sessions = await tutorApi.getSessions({
+        date_from: format(monthStart, 'yyyy-MM-dd'),
+        date_to: format(monthEnd, 'yyyy-MM-dd'),
+      });
+
+      const lessonsByDate: Record<string, LessonEvent[]> = {};
+      sessions.forEach(session => {
+        const dateKey = format(new Date(session.date), 'yyyy-MM-dd');
+        if (!lessonsByDate[dateKey]) {
+          lessonsByDate[dateKey] = [];
+        }
+        lessonsByDate[dateKey].push(mapSessionToLesson(session));
+      });
+      setLessons(lessonsByDate);
 
       toast({
         title: "Lesson Updated",
         description: "Lesson has been updated successfully.",
+      });
+    } catch (error) {
+      console.error('Failed to update lesson:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update lesson. Please try again.",
+        variant: "destructive",
       });
     }
 
@@ -377,53 +655,79 @@ export default function TutorCalendar() {
     setEditingLesson(null);
   };
 
-  const handleAddLesson = () => {
-    if (newLesson.students.length === 0 || !newLesson.date || !newLesson.time) {
+  const handleAddLesson = async () => {
+    if (newLesson.studentIds.length === 0 || !newLesson.date || !newLesson.startTime || !newLesson.subject) {
       toast({
         title: "Missing Information",
-        description: "Please select at least one student and fill in date and time.",
+        description: "Please select at least one student, fill in date, time, and subject.",
         variant: "destructive",
       });
       return;
     }
-    const dateKey = newLesson.date;
-    const studentNames = newLesson.students.map(s => getStudentDisplayName(s));
-    const lessonTitle = newLesson.lessonTitle || (studentNames.length === 1 ? studentNames[0] : `${studentNames.length} Students`);
-    
-    const lesson: LessonEvent = {
-      id: `${Date.now()}`,
-      studentNames,
-      lessonTitle,
-      time: newLesson.time,
-      duration: parseFloat(newLesson.duration),
-      mode: newLesson.mode,
-      status: 'scheduled',
-      color: getLessonColor({ id: '', studentNames: [], time: newLesson.time, duration: parseFloat(newLesson.duration), mode: newLesson.mode, status: 'scheduled', color: '' }),
-      tutorName: 'Vu Dinh',
-      location: newLesson.mode === 'online' ? 'Online' : 'Student\'s Home',
-      subject: 'Mathematics',
-      wage: 45.00 * studentNames.length, // Wage per student
-    };
 
-    setLessons(prev => ({
-      ...prev,
-      [dateKey]: prev[dateKey] ? [...prev[dateKey], lesson] : [lesson],
-    }));
+    try {
+      // Calculate end time based on duration
+      const [startHour, startMin] = newLesson.startTime.split(':').map(Number);
+      const durationHours = parseFloat(newLesson.duration);
+      const endHour = startHour + Math.floor(durationHours);
+      const endMin = startMin + ((durationHours % 1) * 60);
+      // Format as H:i (HH:MM) without seconds
+      const endTime = `${endHour.toString().padStart(2, '0')}:${Math.floor(endMin).toString().padStart(2, '0')}`;
 
-    toast({
-      title: "Lesson Added",
-      description: `Lesson scheduled for ${studentNames.length} student(s) successfully.`,
-    });
-    setNewLesson({ students: [], lessonTitle: '', date: '', time: '', duration: '1', mode: 'online' });
-    setIsAddLessonOpen(false);
+      // Create session via API
+      // API expects H:i format (HH:MM) without seconds
+      await tutorApi.createSession({
+        date: newLesson.date,
+        start_time: newLesson.startTime, // Already in HH:MM format from time input
+        end_time: endTime,
+        subject: newLesson.subject,
+        year_level: newLesson.yearLevel || undefined,
+        location: newLesson.location,
+        session_type: newLesson.studentIds.length > 1 ? 'group' : '1:1',
+        student_ids: newLesson.studentIds,
+        class_id: newLesson.classId || undefined,
+      });
+
+      // Reload sessions
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(currentDate);
+      const sessions = await tutorApi.getSessions({
+        date_from: format(monthStart, 'yyyy-MM-dd'),
+        date_to: format(monthEnd, 'yyyy-MM-dd'),
+      });
+
+      const lessonsByDate: Record<string, LessonEvent[]> = {};
+      sessions.forEach(session => {
+        const dateKey = format(new Date(session.date), 'yyyy-MM-dd');
+        if (!lessonsByDate[dateKey]) {
+          lessonsByDate[dateKey] = [];
+        }
+        lessonsByDate[dateKey].push(mapSessionToLesson(session));
+      });
+      setLessons(lessonsByDate);
+
+      toast({
+        title: "Lesson Added",
+        description: `Lesson scheduled for ${newLesson.studentIds.length} student(s) successfully.`,
+      });
+      setNewLesson({ studentIds: [], subject: '', date: '', startTime: '', endTime: '', duration: '1', location: 'online', yearLevel: '', classId: null });
+      setIsAddLessonOpen(false);
+    } catch (error) {
+      console.error('Failed to create lesson:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create lesson. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const toggleStudent = (studentValue: string) => {
+  const toggleStudent = (studentId: number) => {
     setNewLesson(prev => ({
       ...prev,
-      students: prev.students.includes(studentValue)
-        ? prev.students.filter(s => s !== studentValue)
-        : [...prev.students, studentValue]
+      studentIds: prev.studentIds.includes(studentId)
+        ? prev.studentIds.filter(id => id !== studentId)
+        : [...prev.studentIds, studentId]
     }));
   };
 
@@ -505,12 +809,12 @@ export default function TutorCalendar() {
               </DialogHeader>
               <div className="space-y-4">
               <div>
-                <Label htmlFor="lesson-title">Lesson Title (Optional)</Label>
+                <Label htmlFor="subject">Subject *</Label>
                 <Input
-                  id="lesson-title"
-                  placeholder="e.g., Mathematics Group Class, Alcatraz"
-                  value={newLesson.lessonTitle}
-                  onChange={(e) => setNewLesson({ ...newLesson, lessonTitle: e.target.value })}
+                  id="subject"
+                  placeholder="e.g., Mathematics, Physics, English"
+                  value={newLesson.subject}
+                  onChange={(e) => setNewLesson({ ...newLesson, subject: e.target.value })}
                 />
               </div>
               <div>
@@ -522,42 +826,45 @@ export default function TutorCalendar() {
                       className="w-full justify-start mt-2"
                     >
                       <Users className="mr-2 h-4 w-4" />
-                      {newLesson.students.length === 0
+                      {newLesson.studentIds.length === 0
                         ? 'Select students...'
-                        : `${newLesson.students.length} student${newLesson.students.length !== 1 ? 's' : ''} selected`}
+                        : `${newLesson.studentIds.length} student${newLesson.studentIds.length !== 1 ? 's' : ''} selected`}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-80" align="start">
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold">Select Students</Label>
                       <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {['sampoorna', 'xavier', 'ethan', 'natasha', 'sophia'].map(studentValue => (
-                          <div key={studentValue} className="flex items-center space-x-2">
+                        {availableStudents.map(student => (
+                          <div key={student.id} className="flex items-center space-x-2">
                             <Checkbox
-                              id={`student-${studentValue}`}
-                              checked={newLesson.students.includes(studentValue)}
-                              onCheckedChange={() => toggleStudent(studentValue)}
+                              id={`student-${student.id}`}
+                              checked={newLesson.studentIds.includes(student.id)}
+                              onCheckedChange={() => toggleStudent(student.id)}
                             />
-                            <Label htmlFor={`student-${studentValue}`} className="cursor-pointer text-sm flex-1">
-                              {getStudentDisplayName(studentValue)}
+                            <Label htmlFor={`student-${student.id}`} className="cursor-pointer text-sm flex-1">
+                              {student.user?.name || `Student ${student.id}`}
                             </Label>
                           </div>
                         ))}
                       </div>
-                      {newLesson.students.length > 0 && (
+                      {newLesson.studentIds.length > 0 && (
                         <div className="pt-2 border-t">
                           <div className="flex flex-wrap gap-1">
-                            {newLesson.students.map(student => (
-                              <Badge
-                                key={student}
-                                variant="default"
-                                className="cursor-pointer"
-                                onClick={() => toggleStudent(student)}
-                              >
-                                {getStudentDisplayName(student)}
-                                <X className="ml-1 h-3 w-3" />
-                              </Badge>
-                            ))}
+                            {newLesson.studentIds.map(studentId => {
+                              const student = availableStudents.find(s => s.id === studentId);
+                              return (
+                                <Badge
+                                  key={studentId}
+                                  variant="default"
+                                  className="cursor-pointer"
+                                  onClick={() => toggleStudent(studentId)}
+                                >
+                                  {student?.user?.name || `Student ${studentId}`}
+                                  <X className="ml-1 h-3 w-3" />
+                                </Badge>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -566,7 +873,7 @@ export default function TutorCalendar() {
                 </Popover>
               </div>
               <div>
-                <Label htmlFor="date">Date</Label>
+                <Label htmlFor="date">Date *</Label>
                 <Input
                   id="date"
                   type="date"
@@ -575,12 +882,12 @@ export default function TutorCalendar() {
                 />
               </div>
               <div>
-                <Label htmlFor="time">Time</Label>
+                <Label htmlFor="startTime">Start Time *</Label>
                 <Input
-                  id="time"
+                  id="startTime"
                   type="time"
-                  value={newLesson.time}
-                  onChange={(e) => setNewLesson({ ...newLesson, time: e.target.value })}
+                  value={newLesson.startTime}
+                  onChange={(e) => setNewLesson({ ...newLesson, startTime: e.target.value })}
                 />
               </div>
               <div>
@@ -598,16 +905,26 @@ export default function TutorCalendar() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="mode">Mode</Label>
-                <Select value={newLesson.mode} onValueChange={(value: 'online' | 'offline') => setNewLesson({ ...newLesson, mode: value })}>
-                  <SelectTrigger id="mode">
+                <Label htmlFor="location">Location</Label>
+                <Select value={newLesson.location} onValueChange={(value: 'online' | 'home' | 'centre') => setNewLesson({ ...newLesson, location: value })}>
+                  <SelectTrigger id="location">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="online">Online</SelectItem>
-                    <SelectItem value="offline">In-Person</SelectItem>
+                    <SelectItem value="home">Student's Home</SelectItem>
+                    <SelectItem value="centre">Centre</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label htmlFor="yearLevel">Year Level (Optional)</Label>
+                <Input
+                  id="yearLevel"
+                  placeholder="e.g., Year 10, Year 11"
+                  value={newLesson.yearLevel}
+                  onChange={(e) => setNewLesson({ ...newLesson, yearLevel: e.target.value })}
+                />
               </div>
               </div>
               <DialogFooter>
@@ -638,6 +955,11 @@ export default function TutorCalendar() {
             </div>
           </CardHeader>
           <CardContent>
+            {isLoadingSessions ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
             <div className="grid grid-cols-7 gap-1 md:gap-2">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                 <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
@@ -730,8 +1052,8 @@ export default function TutorCalendar() {
                                   )}
                                   {lesson.subject && (
                                     <div className="flex items-center gap-2.5">
-                                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                                        <BookOpen className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                        <BookOpen className="h-3.5 w-3.5 text-primary dark:text-primary-light" />
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <p className="text-xs text-muted-foreground">Subject</p>
@@ -741,8 +1063,8 @@ export default function TutorCalendar() {
                                   )}
                                   {lesson.location && (
                                     <div className="flex items-center gap-2.5">
-                                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                                        <MapPin className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center">
+                                        <MapPin className="h-3.5 w-3.5 text-secondary dark:text-secondary-light" />
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <p className="text-xs text-muted-foreground">Location</p>
@@ -769,9 +1091,9 @@ export default function TutorCalendar() {
                                   </div>
                                 )}
                                 {lesson.lessonNote && (
-                                  <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
-                                    <p className="font-semibold text-xs text-green-700 dark:text-green-300 mb-1">Lesson Notes</p>
-                                    <p className="text-xs text-green-600 dark:text-green-400 line-clamp-2 leading-relaxed">{lesson.lessonNote}</p>
+                                  <div className="p-3 bg-secondary/10 dark:bg-secondary/20 rounded-lg border border-secondary/30 dark:border-secondary/40">
+                                    <p className="font-semibold text-xs text-secondary dark:text-secondary-light mb-1">Lesson Notes</p>
+                                    <p className="text-xs text-secondary dark:text-secondary-light line-clamp-2 leading-relaxed">{lesson.lessonNote}</p>
                                   </div>
                                 )}
                               </div>
@@ -783,18 +1105,18 @@ export default function TutorCalendar() {
                                         size="default"
                                         variant="outline"
                                         onClick={() => handleEditLesson(lesson)}
-                                        className="w-full px-4 py-2.5 text-sm hover:bg-primary/5 hover:border-primary/50 transition-colors justify-start"
+                                        className="w-full px-4 py-2.5 text-sm hover:bg-primary hover:text-white hover:border-primary transition-colors justify-start group"
                                       >
-                                        <Edit className="h-4 w-4 mr-2 flex-shrink-0" />
+                                        <Edit className="h-4 w-4 mr-2 flex-shrink-0 group-hover:text-white" />
                                         <span>Edit</span>
                                       </Button>
                                       <Button
                                         size="default"
                                         variant="outline"
                                         onClick={() => handleCompleteLesson(lesson)}
-                                        className="w-full px-4 py-2.5 text-sm hover:bg-green-50 dark:hover:bg-green-950/30 hover:border-green-300 dark:hover:border-green-800 transition-colors justify-start"
+                                        className="w-full px-4 py-2.5 text-sm hover:bg-secondary hover:text-white hover:border-secondary transition-colors justify-start group"
                                       >
-                                        <CheckCircle2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                                        <CheckCircle2 className="h-4 w-4 mr-2 flex-shrink-0 group-hover:text-white" />
                                         <span>Complete & Add Notes</span>
                                       </Button>
                                       <div className="flex gap-2.5">
@@ -811,10 +1133,10 @@ export default function TutorCalendar() {
                                           size="default"
                                           variant="secondary"
                                           onClick={() => handleMarkUnavailable(lesson)}
-                                          className="flex-1 px-4 py-2.5 text-sm hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:border-orange-300 dark:hover:border-orange-800 transition-colors"
+                                          className="flex-1 px-4 py-2.5 text-sm hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:border-orange-300 dark:hover:border-orange-800 hover:!text-white dark:hover:!text-white transition-colors group"
                                         >
-                                          <AlertCircle className="h-4 w-4 mr-2" />
-                                          <span>Unavailable</span>
+                                          <AlertCircle className="h-4 w-4 mr-2 group-hover:text-white" />
+                                          <span className="group-hover:text-white">Unavailable</span>
                                         </Button>
                                       </div>
                                     </div>
@@ -826,9 +1148,9 @@ export default function TutorCalendar() {
                                       size="sm"
                                       variant="outline"
                                       onClick={() => handleGenerateInvoice(lesson)}
-                                      className="w-full hover:bg-primary/5 hover:border-primary/50 transition-colors"
+                                      className="w-full hover:bg-primary hover:text-white hover:border-primary transition-colors group"
                                     >
-                                      <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+                                      <DollarSign className="h-3.5 w-3.5 mr-1.5 group-hover:text-white" />
                                       <span className="hidden sm:inline">Generate Invoice (Admin Only)</span>
                                       <span className="sm:hidden">Generate Invoice</span>
                                     </Button>
@@ -841,22 +1163,22 @@ export default function TutorCalendar() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => handleViewInvoice(lesson)}
-                                        className="flex-1 min-w-[calc(50%-0.25rem)] bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20 border-green-300 dark:border-green-800 transition-colors"
+                                        className="group flex-1 min-w-[calc(50%-0.25rem)] bg-secondary/10 text-secondary dark:text-secondary-light hover:bg-secondary hover:text-white border-secondary/30 dark:border-secondary/40 transition-colors"
                                       >
                                         <DollarSign className="h-3.5 w-3.5 mr-1.5" />
                                         <span className="hidden sm:inline">View Invoice</span>
                                         <span className="sm:hidden">View</span>
                                       </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleDownloadInvoice(lesson)}
-                                        className="flex-1 min-w-[calc(50%-0.25rem)] hover:bg-primary/5 hover:border-primary/50 transition-colors"
-                                      >
-                                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                                        <span className="hidden sm:inline">Download</span>
-                                        <span className="sm:hidden">DL</span>
-                                      </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDownloadInvoice(lesson)}
+                            className="group flex-1 min-w-[calc(50%-0.25rem)] hover:bg-primary hover:text-white hover:border-primary/50 transition-colors"
+                          >
+                            <Download className="h-3.5 w-3.5 mr-1.5" />
+                            <span className="hidden sm:inline">Download</span>
+                            <span className="sm:hidden">DL</span>
+                          </Button>
                                     </div>
                                   </div>
                                 )}
@@ -875,6 +1197,7 @@ export default function TutorCalendar() {
                 );
               })}
             </div>
+            )}
           </CardContent>
         </Card>
 
@@ -958,9 +1281,9 @@ export default function TutorCalendar() {
                       </div>
                     )}
                     {lesson.lessonNote && (
-                      <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
-                        <p className="font-semibold text-xs text-green-700 dark:text-green-300 mb-1">Lesson Notes</p>
-                        <p className="text-xs text-green-600 dark:text-green-400 line-clamp-2 leading-relaxed">{lesson.lessonNote}</p>
+                      <div className="p-3 bg-secondary/10 dark:bg-secondary/20 rounded-lg border border-secondary/30 dark:border-secondary/40">
+                        <p className="font-semibold text-xs text-secondary dark:text-secondary-light mb-1">Lesson Notes</p>
+                        <p className="text-xs text-secondary dark:text-secondary-light line-clamp-2 leading-relaxed">{lesson.lessonNote}</p>
                       </div>
                     )}
                     {lesson.mode === 'offline' && (
@@ -975,18 +1298,18 @@ export default function TutorCalendar() {
                           size="default"
                           variant="outline"
                           onClick={() => handleEditLesson(lesson)}
-                          className="w-full px-4 py-2.5 text-sm hover:bg-primary/5 hover:border-primary/50 transition-colors justify-start"
+                          className="w-full px-4 py-2.5 text-sm hover:bg-primary hover:text-white hover:border-primary transition-colors justify-start group"
                         >
-                          <Edit className="h-4 w-4 mr-2 flex-shrink-0" />
+                          <Edit className="h-4 w-4 mr-2 flex-shrink-0 group-hover:text-white" />
                           <span>Edit</span>
                         </Button>
                         <Button
                           size="default"
                           variant="outline"
                           onClick={() => handleCompleteLesson(lesson)}
-                          className="w-full px-4 py-2.5 text-sm hover:bg-green-50 dark:hover:bg-green-950/30 hover:border-green-300 dark:hover:border-green-800 transition-colors justify-start"
+                          className="w-full px-4 py-2.5 text-sm hover:bg-secondary hover:text-white hover:border-secondary transition-colors justify-start group"
                         >
-                          <CheckCircle2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                          <CheckCircle2 className="h-4 w-4 mr-2 flex-shrink-0 group-hover:text-white" />
                           <span>Complete & Add Notes</span>
                         </Button>
                         <div className="flex gap-2.5">
@@ -1003,10 +1326,10 @@ export default function TutorCalendar() {
                             size="default"
                             variant="secondary"
                             onClick={() => handleMarkUnavailable(lesson)}
-                            className="flex-1 px-4 py-2.5 text-sm hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:border-orange-300 dark:hover:border-orange-800 transition-colors"
+                            className="flex-1 px-4 py-2.5 text-sm hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:border-orange-300 dark:hover:border-orange-800 hover:!text-white dark:hover:!text-white transition-colors group"
                           >
-                            <AlertCircle className="h-4 w-4 mr-2" />
-                            <span>Unavailable</span>
+                            <AlertCircle className="h-4 w-4 mr-2 group-hover:text-white" />
+                            <span className="group-hover:text-white">Unavailable</span>
                           </Button>
                         </div>
                       </div>
@@ -1017,9 +1340,9 @@ export default function TutorCalendar() {
                           size="sm"
                           variant="outline"
                           onClick={() => handleGenerateInvoice(lesson)}
-                          className="w-full hover:bg-primary/5 hover:border-primary/50 transition-colors"
+                          className="w-full hover:bg-primary hover:text-white hover:border-primary transition-colors group"
                         >
-                          <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+                          <DollarSign className="h-3.5 w-3.5 mr-1.5 group-hover:text-white" />
                           <span className="hidden sm:inline">Generate Invoice (Admin Only)</span>
                           <span className="sm:hidden">Generate Invoice</span>
                         </Button>
@@ -1032,19 +1355,19 @@ export default function TutorCalendar() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleViewInvoice(lesson)}
-                            className="flex-1 min-w-[calc(50%-0.25rem)] bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20 border-green-300 dark:border-green-800 transition-colors"
+                            className="group flex-1 min-w-[calc(50%-0.25rem)] bg-secondary/10 text-secondary dark:text-secondary-light hover:bg-secondary hover:text-white border-secondary/30 dark:border-secondary/40 transition-colors"
                           >
                             <DollarSign className="h-3.5 w-3.5 mr-1.5" />
-                            View Invoice
+                            <span>View Invoice</span>
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => handleDownloadInvoice(lesson)}
-                            className="flex-1 min-w-[calc(50%-0.25rem)] hover:bg-primary/5 hover:border-primary/50 transition-colors"
+                            className="group flex-1 min-w-[calc(50%-0.25rem)] hover:bg-primary hover:text-white hover:border-primary/50 transition-colors"
                           >
                             <Download className="h-3.5 w-3.5 mr-1.5" />
-                            Download
+                            <span>Download</span>
                           </Button>
                         </div>
                       </div>
@@ -1230,7 +1553,7 @@ export default function TutorCalendar() {
       )}
 
       {/* Invoice View Modal */}
-      {selectedLesson && generatedInvoices[selectedLesson.id] && (
+      {selectedLesson && (
         <InvoicePreviewModal
           open={isInvoiceViewOpen}
           onOpenChange={setIsInvoiceViewOpen}
@@ -1249,7 +1572,7 @@ export default function TutorCalendar() {
           }}
           onGenerate={() => {}}
           viewOnly={true}
-          invoiceData={generatedInvoices[selectedLesson.id]}
+          invoiceData={generatedInvoices[selectedLesson.id] || null}
         />
       )}
 
@@ -1262,119 +1585,100 @@ export default function TutorCalendar() {
               Update lesson details before completing or cancelling
             </DialogDescription>
           </DialogHeader>
-          {editingLesson && (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="edit-lesson-title">Lesson Title</Label>
-                <Input
-                  id="edit-lesson-title"
-                  placeholder="e.g., Mathematics Group Class"
-                  value={editingLesson.lessonTitle || ''}
-                  onChange={(e) => setEditingLesson({ ...editingLesson, lessonTitle: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Students</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start"
-                    >
-                      <Users className="mr-2 h-4 w-4" />
-                      {editingLesson.studentNames.length} student{editingLesson.studentNames.length !== 1 ? 's' : ''} selected
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" align="start">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-semibold">Select Students</Label>
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {['sampoorna', 'xavier', 'ethan', 'natasha', 'sophia'].map(studentValue => {
-                          const studentName = getStudentDisplayName(studentValue);
-                          const isSelected = editingLesson.studentNames.includes(studentName);
-                          return (
-                            <div key={studentValue} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`edit-student-${studentValue}`}
-                                checked={isSelected}
-                                onCheckedChange={() => {
-                                  if (isSelected) {
-                                    setEditingLesson({
-                                      ...editingLesson,
-                                      studentNames: editingLesson.studentNames.filter(n => n !== studentName),
-                                    });
-                                  } else {
-                                    setEditingLesson({
-                                      ...editingLesson,
-                                      studentNames: [...editingLesson.studentNames, studentName],
-                                    });
-                                  }
-                                }}
-                              />
-                              <Label htmlFor={`edit-student-${studentValue}`} className="cursor-pointer text-sm flex-1">
-                                {studentName}
-                              </Label>
-                            </div>
-                          );
-                        })}
-                      </div>
+          {editingLesson && (() => {
+            // Parse time from "04:00 PM" format to "HH:MM" for input
+            const parseTimeForInput = (timeStr: string): string => {
+              if (timeStr.includes('PM') || timeStr.includes('AM')) {
+                const [time, period] = timeStr.split(' ');
+                const [hours, minutes] = time.split(':');
+                let hour24 = parseInt(hours);
+                if (period === 'PM' && hour24 !== 12) hour24 += 12;
+                if (period === 'AM' && hour24 === 12) hour24 = 0;
+                return `${hour24.toString().padStart(2, '0')}:${minutes}`;
+              }
+              return timeStr.split(' ')[0] || '';
+            };
+
+            return (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="edit-subject">Subject</Label>
+                  <Input
+                    id="edit-subject"
+                    placeholder="e.g., Mathematics, Physics"
+                    value={editingLesson.subject || ''}
+                    onChange={(e) => setEditingLesson({ ...editingLesson, subject: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Students (Read-only)</Label>
+                  <div className="mt-2 p-3 bg-muted rounded-lg">
+                    <div className="flex flex-wrap gap-1">
+                      {editingLesson.studentNames.map((name, idx) => (
+                        <Badge key={idx} variant="outline">{name}</Badge>
+                      ))}
                     </div>
-                  </PopoverContent>
-                </Popover>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="edit-time">Start Time</Label>
+                  <Input
+                    id="edit-time"
+                    type="time"
+                    value={parseTimeForInput(editingLesson.time)}
+                    onChange={(e) => {
+                      const timeValue = e.target.value;
+                      const [hours, minutes] = timeValue.split(':');
+                      const hour12 = parseInt(hours) % 12 || 12;
+                      const period = parseInt(hours) >= 12 ? 'PM' : 'AM';
+                      setEditingLesson({ ...editingLesson, time: `${hour12}:${minutes} ${period}` });
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-duration">Duration (hours)</Label>
+                  <Select 
+                    value={editingLesson.duration.toString()} 
+                    onValueChange={(value) => setEditingLesson({ ...editingLesson, duration: parseFloat(value) })}
+                  >
+                    <SelectTrigger id="edit-duration">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0.5">0.5 hour</SelectItem>
+                      <SelectItem value="1">1 hour</SelectItem>
+                      <SelectItem value="1.5">1.5 hours</SelectItem>
+                      <SelectItem value="2">2 hours</SelectItem>
+                      <SelectItem value="2.5">2.5 hours</SelectItem>
+                      <SelectItem value="3">3 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="edit-mode">Location</Label>
+                  <Select 
+                    value={editingLesson.mode === 'online' ? 'online' : editingLesson.location?.includes('Home') ? 'home' : 'centre'} 
+                    onValueChange={(value: 'online' | 'home' | 'centre') => {
+                      setEditingLesson({ 
+                        ...editingLesson, 
+                        mode: value === 'online' ? 'online' : 'offline',
+                        location: value === 'online' ? 'Online' : value === 'home' ? 'Student\'s Home' : 'Centre'
+                      });
+                    }}
+                  >
+                    <SelectTrigger id="edit-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="online">Online</SelectItem>
+                      <SelectItem value="home">Student's Home</SelectItem>
+                      <SelectItem value="centre">Centre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div>
-                <Label htmlFor="edit-time">Time</Label>
-                <Input
-                  id="edit-time"
-                  type="time"
-                  value={editingLesson.time.includes(':') && !editingLesson.time.includes('PM') && !editingLesson.time.includes('AM') 
-                    ? editingLesson.time.split(' ')[0] 
-                    : ''}
-                  onChange={(e) => {
-                    const timeValue = e.target.value;
-                    const [hours, minutes] = timeValue.split(':');
-                    const hour12 = parseInt(hours) % 12 || 12;
-                    const period = parseInt(hours) >= 12 ? 'PM' : 'AM';
-                    setEditingLesson({ ...editingLesson, time: `${hour12}:${minutes} ${period}` });
-                  }}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-duration">Duration (hours)</Label>
-                <Select 
-                  value={editingLesson.duration.toString()} 
-                  onValueChange={(value) => setEditingLesson({ ...editingLesson, duration: parseFloat(value) })}
-                >
-                  <SelectTrigger id="edit-duration">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0.5">0.5 hour</SelectItem>
-                    <SelectItem value="1">1 hour</SelectItem>
-                    <SelectItem value="1.5">1.5 hours</SelectItem>
-                    <SelectItem value="2">2 hours</SelectItem>
-                    <SelectItem value="2.5">2.5 hours</SelectItem>
-                    <SelectItem value="3">3 hours</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edit-mode">Mode</Label>
-                <Select 
-                  value={editingLesson.mode} 
-                  onValueChange={(value: 'online' | 'offline') => setEditingLesson({ ...editingLesson, mode: value })}
-                >
-                  <SelectTrigger id="edit-mode">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="online">Online</SelectItem>
-                    <SelectItem value="offline">In-Person</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
+            );
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setIsEditLessonOpen(false);

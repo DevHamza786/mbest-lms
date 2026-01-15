@@ -1,102 +1,70 @@
-import { useState } from 'react';
-import { Calendar, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar, TrendingUp, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-interface AttendanceRecord {
-  id: string;
-  classId: string;
-  className: string;
-  date: string;
-  time: string;
-  mode: 'online' | 'offline';
-  status: 'present' | 'absent' | 'late';
-  markedBy: string;
-}
+import { studentApi } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 export default function StudentAttendance() {
-  const [attendanceRecords] = useState<AttendanceRecord[]>([
-    {
-      id: 'att-1',
-      classId: 'class-1',
-      className: 'Advanced Mathematics Grade 12',
-      date: '2024-01-15',
-      time: '09:00 AM',
-      mode: 'online',
-      status: 'present',
-      markedBy: 'Dr. Sarah Johnson'
-    },
-    {
-      id: 'att-2',
-      classId: 'class-2',
-      className: 'Physics Grade 11',
-      date: '2024-01-15',
-      time: '02:00 PM',
-      mode: 'offline',
-      status: 'present',
-      markedBy: 'Prof. Michael Chen'
-    },
-    {
-      id: 'att-3',
-      classId: 'class-1',
-      className: 'Advanced Mathematics Grade 12',
-      date: '2024-01-14',
-      time: '09:00 AM',
-      mode: 'online',
-      status: 'late',
-      markedBy: 'Dr. Sarah Johnson'
-    },
-    {
-      id: 'att-4',
-      classId: 'class-3',
-      className: 'English Literature',
-      date: '2024-01-13',
-      time: '11:00 AM',
-      mode: 'offline',
-      status: 'absent',
-      markedBy: 'Mrs. Emily Davis'
-    },
-    {
-      id: 'att-5',
-      classId: 'class-2',
-      className: 'Physics Grade 11',
-      date: '2024-01-12',
-      time: '02:00 PM',
-      mode: 'offline',
-      status: 'present',
-      markedBy: 'Prof. Michael Chen'
-    }
-  ]);
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [statistics, setStatistics] = useState<any>({
+    total_sessions: 0,
+    present: 0,
+    absent: 0,
+    late: 0,
+    attendance_rate: 0,
+  });
 
-  const classStats = [
-    {
-      className: 'Advanced Mathematics Grade 12',
-      total: 20,
-      present: 18,
-      absent: 1,
-      late: 1,
-      rate: 90
-    },
-    {
-      className: 'Physics Grade 11',
-      total: 15,
-      present: 14,
-      absent: 0,
-      late: 1,
-      rate: 93
-    },
-    {
-      className: 'English Literature',
-      total: 18,
-      present: 16,
-      absent: 2,
-      late: 0,
-      rate: 89
+  useEffect(() => {
+    const loadAttendance = async () => {
+      try {
+        setIsLoading(true);
+        const response = await studentApi.getAttendance({ per_page: 100 });
+        setAttendanceRecords(response.records || []);
+        setStatistics(response.statistics || statistics);
+      } catch (error) {
+        console.error('Failed to load attendance:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load attendance records',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAttendance();
+  }, [toast]);
+  // Group attendance by class
+  const classStats = attendanceRecords.reduce((acc: any, record: any) => {
+    const className = record.classModel?.name || record.subject || 'Unknown Class';
+    if (!acc[className]) {
+      acc[className] = {
+        className,
+        total: 0,
+        present: 0,
+        absent: 0,
+        late: 0,
+      };
     }
-  ];
+    acc[className].total++;
+    const status = record.attendance_status || 'absent';
+    if (status === 'present') acc[className].present++;
+    else if (status === 'absent') acc[className].absent++;
+    else if (status === 'late') acc[className].late++;
+    return acc;
+  }, {});
+
+  const classStatsArray = Object.values(classStats).map((stat: any) => ({
+    ...stat,
+    rate: stat.total > 0 ? Math.round((stat.present / stat.total) * 100) : 0,
+  }));
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -117,12 +85,10 @@ export default function StudentAttendance() {
       : 'bg-blue-500/10 text-blue-700 dark:text-blue-400';
   };
 
-  const overallRate = Math.round(
-    (attendanceRecords.filter(r => r.status === 'present').length / attendanceRecords.length) * 100
-  );
-  const totalPresent = attendanceRecords.filter(r => r.status === 'present').length;
-  const totalAbsent = attendanceRecords.filter(r => r.status === 'absent').length;
-  const totalLate = attendanceRecords.filter(r => r.status === 'late').length;
+  const overallRate = statistics.attendance_rate || 0;
+  const totalPresent = statistics.present || 0;
+  const totalAbsent = statistics.absent || 0;
+  const totalLate = statistics.late || 0;
 
   return (
     <div className="space-y-6 p-6">
@@ -134,48 +100,60 @@ export default function StudentAttendance() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overall Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{overallRate}%</div>
-            <Progress value={overallRate} className="mt-2" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Present</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">{totalPresent}</div>
-            <p className="text-xs text-muted-foreground">Classes attended</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Absent</CardTitle>
-            <AlertCircle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600 dark:text-red-400">{totalAbsent}</div>
-            <p className="text-xs text-muted-foreground">Classes missed</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Late Arrivals</CardTitle>
-            <Calendar className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{totalLate}</div>
-            <p className="text-xs text-muted-foreground">Times late</p>
-          </CardContent>
-        </Card>
-      </div>
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="py-8">
+                <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Overall Rate</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{overallRate}%</div>
+              <Progress value={overallRate} className="mt-2" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Present</CardTitle>
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{totalPresent}</div>
+              <p className="text-xs text-muted-foreground">Classes attended</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Absent</CardTitle>
+              <AlertCircle className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600 dark:text-red-400">{totalAbsent}</div>
+              <p className="text-xs text-muted-foreground">Classes missed</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Late Arrivals</CardTitle>
+              <Calendar className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{totalLate}</div>
+              <p className="text-xs text-muted-foreground">Times late</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Main Content */}
       <Tabs defaultValue="history" className="space-y-4">
@@ -191,50 +169,77 @@ export default function StudentAttendance() {
               <CardDescription>Your complete attendance history across all classes</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Class</TableHead>
-                    <TableHead>Date & Time</TableHead>
-                    <TableHead>Mode</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Marked By</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {attendanceRecords.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell className="font-medium">{record.className}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div>{record.date}</div>
-                          <div className="text-muted-foreground">{record.time}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getModeColor(record.mode)}>
-                          {record.mode}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(record.status)}>
-                          {record.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {record.markedBy}
-                      </TableCell>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : attendanceRecords.length === 0 ? (
+                <p className="text-center text-muted-foreground py-12">No attendance records available.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Class</TableHead>
+                      <TableHead>Date & Time</TableHead>
+                      <TableHead>Mode</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Marked By</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {attendanceRecords.map((record) => {
+                      const mode = record.location === 'online' ? 'online' : 'offline';
+                      const status = record.attendance_status || 'absent';
+                      return (
+                        <TableRow key={record.id}>
+                          <TableCell className="font-medium">
+                            {record.classModel?.name || record.subject || 'Unknown'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              <div>{new Date(record.date).toLocaleDateString()}</div>
+                              <div className="text-muted-foreground">
+                                {record.start_time} - {record.end_time}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={getModeColor(mode)}>
+                              {mode}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={getStatusColor(status)}>
+                              {status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {record.teacher?.user?.name || 'N/A'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="by-class" className="space-y-4">
-          <div className="grid gap-4">
-            {classStats.map((stat, index) => (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : classStatsArray.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-muted-foreground">No attendance records by class.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {classStatsArray.map((stat, index) => (
               <Card key={index}>
                 <CardHeader>
                   <CardTitle className="text-lg">{stat.className}</CardTitle>
@@ -266,8 +271,9 @@ export default function StudentAttendance() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

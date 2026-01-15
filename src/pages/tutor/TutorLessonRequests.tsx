@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from '@/hooks/use-toast';
-import { Clock, User, Calendar, CheckCircle2, XCircle, Info } from "lucide-react";
+import { Clock, User, Calendar, CheckCircle2, XCircle, Info, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { tutorApi } from '@/lib/api';
+import { format } from 'date-fns';
 
 interface LessonRequest {
-  id: string;
+  id: string | number;
   studentName: string;
   parentName: string;
   lessonType: string;
@@ -24,60 +26,148 @@ export default function TutorLessonRequests() {
   const { toast } = useToast();
   const [selectedRequest, setSelectedRequest] = useState<LessonRequest | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [requests, setRequests] = useState<LessonRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [requests, setRequests] = useState<LessonRequest[]>([
-    {
-      id: '1',
-      studentName: 'Emma Wilson',
-      parentName: 'Sarah Wilson',
-      lessonType: 'Mathematics - Year 10',
-      preferredDate: '2025-01-20',
-      preferredTime: '4:00 PM',
-      duration: '1.5 hours',
-      message: 'Emma needs help with quadratic equations and graphing.',
-      requestedAt: '2025-01-15 10:30 AM',
-      status: 'pending'
-    },
-    {
-      id: '2',
-      studentName: 'James Chen',
-      parentName: 'Linda Chen',
-      lessonType: 'Physics - Year 11',
-      preferredDate: '2025-01-22',
-      preferredTime: '2:00 PM',
-      duration: '2 hours',
-      message: 'Needs assistance with kinematics problems for upcoming test.',
-      requestedAt: '2025-01-16 2:15 PM',
-      status: 'pending'
-    },
-  ]);
+  // Load lesson requests on mount
+  useEffect(() => {
+    loadLessonRequests();
+  }, []);
+
+  const loadLessonRequests = async () => {
+    try {
+      setIsLoading(true);
+      const data = await tutorApi.getLessonRequests();
+      
+      // Map API response to component's LessonRequest format
+      // Note: This mapping depends on the actual API response structure
+      // Adjust these mappings based on your backend response
+      const mappedRequests: LessonRequest[] = data.map((item: any) => {
+        // Helper function to safely format date
+        const formatDate = (dateString: string | null | undefined, formatStr: string): string => {
+          if (!dateString) return 'N/A';
+          const date = new Date(dateString);
+          if (isNaN(date.getTime())) return 'N/A';
+          try {
+            return format(date, formatStr);
+          } catch (error) {
+            return 'N/A';
+          }
+        };
+
+        // Get preferred date with fallback
+        let preferredDate = item.preferred_date || item.date;
+        if (!preferredDate && item.created_at) {
+          preferredDate = formatDate(item.created_at, 'yyyy-MM-dd');
+        }
+        if (!preferredDate) {
+          preferredDate = 'N/A';
+        }
+
+        // Get requested at date
+        const requestedAt = item.requested_at || item.created_at 
+          ? formatDate(item.requested_at || item.created_at, 'yyyy-MM-dd hh:mm a')
+          : 'N/A';
+
+        // Parse message - if body contains JSON, extract the message field
+        let messageText = item.message || item.body || item.description || '';
+        if (messageText) {
+          try {
+            // Try to parse as JSON
+            const parsed = JSON.parse(messageText);
+            if (typeof parsed === 'object' && parsed !== null && parsed.message) {
+              // If it's a JSON object with a message field, use that
+              messageText = parsed.message;
+            }
+          } catch (e) {
+            // If parsing fails, it's not JSON, use the original text
+            // messageText remains unchanged
+          }
+        }
+
+        return {
+          id: item.id || item.request_id,
+          studentName: item.student_name || item.student?.name || 'Unknown Student',
+          parentName: item.parent_name || item.parent?.name || item.sender?.name || 'Unknown Parent',
+          lessonType: item.lesson_type || item.subject || item.lesson_subject || 'N/A',
+          preferredDate: preferredDate,
+          preferredTime: item.preferred_time || item.time || item.start_time || 'N/A',
+          duration: item.duration || (item.duration_hours ? `${item.duration_hours} hours` : 'N/A'),
+          message: messageText,
+          requestedAt: requestedAt,
+          status: item.status || 'pending',
+        };
+      });
+
+      setRequests(mappedRequests);
+    } catch (error) {
+      console.error('Failed to load lesson requests:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load lesson requests. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleViewDetails = (request: LessonRequest) => {
     setSelectedRequest(request);
     setIsDetailsOpen(true);
   };
 
-  const handleApprove = (requestId: string) => {
-    setRequests(requests.map(req => 
-      req.id === requestId ? { ...req, status: 'approved' as const } : req
-    ));
-    toast({
-      title: "Request Approved",
-      description: "The lesson request has been approved and the family has been notified.",
-    });
-    setIsDetailsOpen(false);
+  const handleApprove = async (requestId: string | number) => {
+    try {
+      await tutorApi.approveLessonRequest(Number(requestId));
+      
+      setRequests(requests.map(req => 
+        req.id === requestId ? { ...req, status: 'approved' as const } : req
+      ));
+      
+      toast({
+        title: "Request Approved",
+        description: "The lesson request has been approved and the family has been notified.",
+      });
+      setIsDetailsOpen(false);
+      
+      // Reload requests to get updated data
+      loadLessonRequests();
+    } catch (error) {
+      console.error('Failed to approve lesson request:', error);
+      toast({
+        title: "Error",
+        description: "Failed to approve lesson request. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDecline = (requestId: string) => {
-    setRequests(requests.map(req => 
-      req.id === requestId ? { ...req, status: 'declined' as const } : req
-    ));
-    toast({
-      title: "Request Declined",
-      description: "The lesson request has been declined.",
-      variant: "destructive",
-    });
-    setIsDetailsOpen(false);
+  const handleDecline = async (requestId: string | number) => {
+    try {
+      await tutorApi.declineLessonRequest(Number(requestId));
+      
+      setRequests(requests.map(req => 
+        req.id === requestId ? { ...req, status: 'declined' as const } : req
+      ));
+      
+      toast({
+        title: "Request Declined",
+        description: "The lesson request has been declined.",
+        variant: "destructive",
+      });
+      setIsDetailsOpen(false);
+      
+      // Reload requests to get updated data
+      loadLessonRequests();
+    } catch (error) {
+      console.error('Failed to decline lesson request:', error);
+      toast({
+        title: "Error",
+        description: "Failed to decline lesson request. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -111,7 +201,14 @@ export default function TutorLessonRequests() {
         )}
       </div>
 
-      {requests.length === 0 ? (
+      {isLoading ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading lesson requests...</p>
+          </CardContent>
+        </Card>
+      ) : requests.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
             <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -240,7 +337,9 @@ export default function TutorLessonRequests() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Status</Label>
-                {getStatusBadge(selectedRequest.status)}
+                <div className="mt-2">
+                  {getStatusBadge(selectedRequest.status)}
+                </div>
               </div>
             </div>
           )}
