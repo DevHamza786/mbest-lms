@@ -412,18 +412,17 @@ export default function AdminPayments() {
                 {selectedPayment.payment_slip_url || selectedPayment.payment_slip_path ? (
                   <div className="mt-2 border-2 rounded-lg p-4 bg-muted/30">
                     {(() => {
-                      // Construct full URL for payment slip
+                      // Backend returns full URL in production; fallback for relative paths
                       let imageUrl = '';
                       if (selectedPayment.payment_slip_url) {
-                        // If URL starts with /storage, prepend base URL
-                        if (selectedPayment.payment_slip_url.startsWith('/storage')) {
-                          const baseURL = import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000';
-                          imageUrl = `${baseURL}${selectedPayment.payment_slip_url}`;
-                        } else {
+                        if (selectedPayment.payment_slip_url.startsWith('http://') || selectedPayment.payment_slip_url.startsWith('https://')) {
                           imageUrl = selectedPayment.payment_slip_url;
+                        } else {
+                          const baseURL = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') || window.location.origin;
+                          imageUrl = baseURL + (selectedPayment.payment_slip_url.startsWith('/') ? '' : '/') + selectedPayment.payment_slip_url;
                         }
                       } else if (selectedPayment.payment_slip_path) {
-                        const baseURL = import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+                        const baseURL = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') || window.location.origin;
                         imageUrl = `${baseURL}/storage/${selectedPayment.payment_slip_path}`;
                       }
                       
