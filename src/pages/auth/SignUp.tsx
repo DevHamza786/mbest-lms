@@ -15,8 +15,8 @@ export default function SignUp() {
               Today
             </h1>
             <p className="text-xl text-white/80">
-              Create your account and start your educational journey. Whether you're a student, 
-              tutor, parent, or administrator, MBEST has the tools you need.
+              Create your account and start your educational journey. Sign up as a tutor or parent 
+              to access MBEST learning management system.
             </p>
             <div className="grid grid-cols-1 gap-4 pt-8">
               <div className="flex items-center gap-4 rounded-lg bg-white/10 p-4">

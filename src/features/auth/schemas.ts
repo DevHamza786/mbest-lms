@@ -41,7 +41,7 @@ export const signupSchema = z.object({
   confirmPassword: z
     .string()
     .min(1, 'Please confirm your password'),
-  role: z.enum(['admin', 'tutor', 'student', 'parent']),
+  role: z.enum(['tutor', 'parent']), // Only tutor and parent can sign up
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Passwords do not match',
   path: ['confirmPassword'],

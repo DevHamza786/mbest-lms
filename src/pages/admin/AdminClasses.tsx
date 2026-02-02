@@ -734,6 +734,18 @@ export default function AdminClasses() {
                   {cls.category} • {cls.level}
                 </p>
                     )}
+                    {cls.packages && cls.packages.length > 0 && (
+                <div className="mt-2 pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Included in Packages:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {cls.packages.map((pkg: any) => (
+                      <Badge key={pkg.id} variant="outline" className="text-xs">
+                        {pkg.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                    )}
               </div>
 
                   <Sheet onOpenChange={(open) => {

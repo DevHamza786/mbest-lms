@@ -179,6 +179,22 @@ export const parentApi = {
     return response.data || {};
   },
 
+  async getAvailableClasses(childId: number): Promise<ParentClass[]> {
+    const response = await apiClient.get<ParentClass[]>(`/parent/children/${childId}/classes/available`);
+    // Backend returns: { success: true, data: [...] }
+    // apiClient.get returns: { success: true, data: [...] }
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    return [];
+  },
+
+  async enrollChildInClass(childId: number, classId: number): Promise<any> {
+    const response = await apiClient.post<any>(`/parent/children/${childId}/classes/${classId}/enroll`);
+    if (!response.data) throw new Error('Enrollment failed');
+    return response.data;
+  },
+
   async getChildAssignments(
     childId: number,
     params?: {
@@ -397,5 +413,125 @@ export const parentApi = {
     }
     return response.data || {};
   },
+
+  // Subscription & Payment APIs
+  async getPackages(): Promise<Package[]> {
+    const response = await apiClient.get<Package[]>('/parent/subscription/packages');
+    // Backend returns: { success: true, data: [...] }
+    // apiClient.get returns: { success: true, data: [...] }
+    // So response.data is the array directly
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    // Handle case where data might be nested
+    if (response.data && Array.isArray((response.data as any).data)) {
+      return (response.data as any).data;
+    }
+    return [];
+  },
+
+  async getPackage(id: number): Promise<Package> {
+    const response = await apiClient.get<{ data: Package }>(`/parent/subscription/packages/${id}`);
+    if (!response.data) throw new Error('Package not found');
+    return response.data.data;
+  },
+
+  async getMySubscription(): Promise<SubscriptionInfo> {
+    const response = await apiClient.get<SubscriptionInfo>('/parent/subscription/my-subscription');
+    // Backend returns: { success: true, data: { package: null, status: 'pending', ... } }
+    // apiClient.get returns: { success: true, data: { package: null, status: 'pending', ... } }
+    if (!response.data) {
+      // Return default subscription info if none exists
+      return {
+        package: null,
+        status: 'pending',
+        current_student_count: 0,
+        limits: null,
+        pending_payment: null,
+      };
+    }
+    return response.data;
+  },
+
+  async submitPayment(packageId: number, paymentSlip: File): Promise<Payment> {
+    const formData = new FormData();
+    formData.append('package_id', packageId.toString());
+    formData.append('payment_slip', paymentSlip);
+    
+    const response = await apiClient.post<{ data: Payment }>(
+      '/parent/subscription/payment',
+      formData,
+      true,
+      true // isFormData
+    );
+    if (!response.data) throw new Error('Payment submission failed');
+    return response.data.data;
+  },
+
+  async addStudent(studentData: AddStudentData): Promise<Child> {
+    const response = await apiClient.post<{ data: Child }>('/parent/children', studentData);
+    if (!response.data) throw new Error('Failed to add student');
+    return response.data.data;
+  },
 };
+
+export interface Package {
+  id: number;
+  name: string;
+  price: number;
+  description?: string;
+  student_limit: number;
+  allows_one_on_one: boolean;
+  bank_details?: string;
+  is_active: boolean;
+  classes?: Array<{
+    id: number;
+    name: string;
+    code: string;
+  }>;
+}
+
+export interface Payment {
+  id: number;
+  parent_id: number;
+  package_id: number;
+  amount: number | string; // Can be string from API (e.g., "50.00")
+  payment_slip_path?: string;
+  payment_slip_url?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_notes?: string;
+  approved_at?: string;
+  created_at: string;
+  package?: Package;
+}
+
+export interface SubscriptionInfo {
+  package: Package | null;
+  status: 'pending' | 'active' | 'expired' | 'cancelled';
+  approved_at?: string;
+  current_student_count: number;
+  limits: {
+    student_limit: number;
+    allows_one_on_one: boolean;
+    classes?: Array<{
+      id: number;
+      name: string;
+      code: string;
+    }>;
+  } | null;
+  pending_payment: Payment | null;
+}
+
+export interface AddStudentData {
+  name: string;
+  email: string;
+  password: string;
+  grade?: string;
+  school?: string;
+  phone?: string;
+  date_of_birth?: string;
+  address?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+}
 

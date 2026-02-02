@@ -22,6 +22,10 @@ export type {
   ParentInvoice,
   ParentSession,
   AttendanceRecord,
+  Package,
+  Payment,
+  SubscriptionInfo,
+  AddStudentData,
 } from './parent';
 
 export { studentApi } from './student';
@@ -42,5 +46,5 @@ export type {
 } from './tutor';
 
 export { adminApi } from './admin';
-export type { AdminUser, AdminClass, AdminInvoice, AdminSession } from './admin';
+export type { AdminUser, AdminClass, AdminInvoice, AdminSession, Package, Payment, CreatePackageData, UpdatePackageData } from './admin';
 

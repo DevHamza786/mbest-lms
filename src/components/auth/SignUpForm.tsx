@@ -41,13 +41,22 @@ export function SignUpForm() {
       // Get the user session and redirect to appropriate portal
       const session = useAuthStore.getState().session;
       if (session) {
-        const portalRoot = getPortalRoot(session.role);
-        navigate(portalRoot, { replace: true });
-        
-        toast({
-          title: 'Welcome to MBEST!',
-          description: `Account created successfully. Welcome, ${session.name}!`,
-        });
+        // If parent, redirect to subscription page first
+        if (session.role === 'parent') {
+          navigate('/parent/subscription', { replace: true });
+          toast({
+            title: 'Account Created!',
+            description: 'Please select and pay for a subscription package to continue.',
+          });
+        } else {
+          // For tutors, go to their dashboard
+          const portalRoot = getPortalRoot(session.role);
+          navigate(portalRoot, { replace: true });
+          toast({
+            title: 'Welcome to MBEST!',
+            description: `Account created successfully. Welcome, ${session.name}!`,
+          });
+        }
       }
     } catch (error) {
       // Error is handled by the store
@@ -110,11 +119,13 @@ export function SignUpForm() {
                 <SelectValue placeholder="Select your role" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(roleDisplayNames).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
+                {Object.entries(roleDisplayNames)
+                  .filter(([value]) => value === 'tutor' || value === 'parent')
+                  .map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
             {selectedRole && (

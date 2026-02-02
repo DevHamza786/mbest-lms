@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,12 @@ import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
 import { useParentContext, useParentStore } from '@/lib/store/parentStore';
 import { parentApi } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
+import { AddStudentModal } from '@/components/modals/AddStudentModal';
+import { Plus } from 'lucide-react';
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
+  const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
   const {
     children,
     activeChild,
@@ -298,25 +301,57 @@ const ParentDashboard = () => {
     );
   }
 
+  const handleStudentAdded = async () => {
+    // Reload children after adding a student
+    try {
+      const childrenData = await parentApi.getChildren();
+      if (childrenData && Array.isArray(childrenData) && childrenData.length > 0) {
+        const mappedChildren = childrenData.map(child => ({
+          id: String(child.id),
+          name: child.user?.name || 'Unknown',
+          grade: child.grade || 'N/A',
+          avatar: child.user?.avatar || undefined,
+        }));
+        setChildren(mappedChildren);
+        // Auto-select the newly added child
+        if (mappedChildren.length > 0) {
+          useParentStore.getState().setActiveChild(mappedChildren[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to reload children:', error);
+    }
+  };
+
   if (!activeChild) {
     return (
       <div className="flex-1 space-y-6 p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center max-w-md">
             <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">No Child Selected</h2>
             <p className="text-muted-foreground mb-4">
               {children.length > 0 
                 ? "Please select a child using the dropdown above to view their dashboard."
-                : "No children are available. Please contact support if you believe this is an error."}
+                : "You haven't added any students yet. Add your first student to get started."}
             </p>
-            {children.length > 0 && (
+            {children.length > 0 ? (
               <div className="mt-4">
                 <ChildSwitcher />
               </div>
+            ) : (
+              <Button onClick={() => setIsAddStudentModalOpen(true)} className="mt-4">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Your First Student
+              </Button>
             )}
           </div>
         </div>
+        <AddStudentModal
+          isOpen={isAddStudentModalOpen}
+          onClose={() => setIsAddStudentModalOpen(false)}
+          onSuccess={handleStudentAdded}
+        />
       </div>
     );
   }
@@ -329,6 +364,13 @@ const ParentDashboard = () => {
           <p className="text-muted-foreground">Monitoring {activeChild.name}'s academic progress</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setIsAddStudentModalOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Student
+          </Button>
           <ChildSwitcher />
           <Button onClick={() => navigate('/parent/messages')}>
             <MessageSquare className="mr-2 h-4 w-4" />
@@ -543,6 +585,11 @@ const ParentDashboard = () => {
       </Card>
         </>
       )}
+      <AddStudentModal
+        isOpen={isAddStudentModalOpen}
+        onClose={() => setIsAddStudentModalOpen(false)}
+        onSuccess={handleStudentAdded}
+      />
     </div>
   );
 };

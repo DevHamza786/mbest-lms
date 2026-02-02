@@ -159,8 +159,13 @@ export const useParentStore = create<ParentStore>()(
       // Actions
       setChildren: (children) => {
         set({ children });
-        // Set first child as active if none selected
-        if (!get().activeChildId && children.length > 0) {
+        const currentActiveId = get().activeChildId;
+        
+        // Validate that the current activeChildId exists in the new children list
+        const activeChildExists = currentActiveId && children.some(child => child.id === currentActiveId);
+        
+        // Set first child as active if none selected or if current active child doesn't exist
+        if ((!currentActiveId || !activeChildExists) && children.length > 0) {
           set({ activeChildId: children[0].id });
         }
       },

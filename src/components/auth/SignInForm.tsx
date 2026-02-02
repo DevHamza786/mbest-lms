@@ -38,8 +38,13 @@ export function SignInForm() {
       // Get the user session and redirect to appropriate portal
       const session = useAuthStore.getState().session;
       if (session) {
-        const portalRoot = getPortalRoot(session.role);
-        navigate(portalRoot, { replace: true });
+        // If parent, redirect to subscription page first (SubscriptionGuard will handle redirect to dashboard if active)
+        if (session.role === 'parent') {
+          navigate('/parent/subscription', { replace: true });
+        } else {
+          const portalRoot = getPortalRoot(session.role);
+          navigate(portalRoot, { replace: true });
+        }
         
         toast({
           title: 'Welcome back!',

@@ -14,7 +14,9 @@ import {
   Receipt,
   ClipboardCheck,
   Clock,
-  ClipboardList
+  ClipboardList,
+  Package,
+  Wallet
 } from 'lucide-react';
 import { UserRole } from '@/lib/types/auth';
 
@@ -93,6 +95,18 @@ export const navByRole: Record<UserRole, NavSection[]> = {
           icon: CreditCard, 
           label: 'Billing',
           description: 'Invoices and payment management'
+        },
+        { 
+          href: '/admin/packages', 
+          icon: Package, 
+          label: 'Packages',
+          description: 'Manage subscription packages'
+        },
+        { 
+          href: '/admin/payments', 
+          icon: Wallet, 
+          label: 'Payments',
+          description: 'Review and approve payments'
         },
       ]
     },

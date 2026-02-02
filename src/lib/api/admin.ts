@@ -111,6 +111,11 @@ export interface AdminClass {
       };
     }>;
   }>;
+  packages?: Array<{
+    id: number;
+    name: string;
+    price: number;
+  }>;
   resources?: Array<{
     id: number;
     title: string;
@@ -669,5 +674,141 @@ export const adminApi = {
     }
     return response.data;
   },
+
+  // Package Management
+  async getPackages(params?: { is_active?: boolean }): Promise<Package[]> {
+    const response = await apiClient.get<Package[]>('/admin/packages', params);
+    // API returns {success: true, data: Package[]}
+    // apiClient.get returns ApiResponse<T> which is {success: boolean, data?: T}
+    if (response.success && response.data) {
+      const packages = Array.isArray(response.data) ? response.data : [];
+      console.log('getPackages returning:', packages);
+      return packages;
+    }
+    console.warn('getPackages: No data in response', response);
+    return [];
+  },
+
+  async getAllClasses(): Promise<AdminClass[]> {
+    const response = await apiClient.get<PaginatedResponse<AdminClass>>('/admin/classes', { per_page: 1000 });
+    return response.data?.data || [];
+  },
+
+  async getPackage(id: number): Promise<Package> {
+    const response = await apiClient.get<{ data: Package }>(`/admin/packages/${id}`);
+    if (!response.data) throw new Error('Package not found');
+    return response.data.data;
+  },
+
+  async createPackage(data: CreatePackageData): Promise<Package> {
+    const response = await apiClient.post<{ data: Package }>('/admin/packages', data);
+    if (!response.data) throw new Error('Failed to create package');
+    return response.data.data;
+  },
+
+  async updatePackage(id: number, data: UpdatePackageData): Promise<Package> {
+    const response = await apiClient.put<{ data: Package }>(`/admin/packages/${id}`, data);
+    if (!response.data) throw new Error('Failed to update package');
+    return response.data.data;
+  },
+
+  async deletePackage(id: number): Promise<void> {
+    // Packages should not be deleted - use deactivation instead
+    throw new Error('Packages cannot be deleted. Please deactivate them instead to maintain subscription history.');
+  },
+
+  // Payment Management
+  async getPayments(params?: { status?: string; pending_only?: boolean; per_page?: number; page?: number }): Promise<PaginatedResponse<Payment>> {
+    const response = await apiClient.get<PaginatedResponse<Payment>>('/admin/payments', params);
+    return response.data || { data: [], current_page: 1, last_page: 1, per_page: 15, total: 0, from: 0, to: 0 };
+  },
+
+  async getPayment(id: number): Promise<Payment> {
+    const response = await apiClient.get<Payment>(`/admin/payments/${id}`);
+    // Backend returns: { success: true, data: {...} }
+    // apiClient.get returns: { success: true, data: {...} }
+    // So response.data is the payment object directly
+    if (!response.data) throw new Error('Payment not found');
+    
+    // Handle both nested and direct data structures
+    if (typeof response.data === 'object' && 'id' in response.data) {
+      return response.data as Payment;
+    }
+    // Fallback for nested structure
+    if ((response.data as any).data) {
+      return (response.data as any).data as Payment;
+    }
+    
+    throw new Error('Payment not found');
+  },
+
+  async approvePayment(id: number, adminNotes?: string): Promise<Payment> {
+    const response = await apiClient.post<{ data: Payment }>(`/admin/payments/${id}/approve`, { admin_notes: adminNotes });
+    if (!response.data) throw new Error('Failed to approve payment');
+    return response.data.data;
+  },
+
+  async rejectPayment(id: number, adminNotes: string): Promise<Payment> {
+    const response = await apiClient.post<{ data: Payment }>(`/admin/payments/${id}/reject`, { admin_notes: adminNotes });
+    if (!response.data) throw new Error('Failed to reject payment');
+    return response.data.data;
+  },
 };
+
+export interface Package {
+  id: number;
+  name: string;
+  price: number | string; // Can be string from API (decimal) or number
+  description?: string;
+  student_limit: number;
+  allows_one_on_one: boolean;
+  bank_details?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  classes?: Array<{
+    id: number;
+    name: string;
+    code: string;
+  }>;
+}
+
+export interface CreatePackageData {
+  name: string;
+  price: number;
+  description?: string;
+  student_limit: number;
+  class_ids?: number[];
+  allows_one_on_one?: boolean;
+  bank_details?: string;
+  is_active?: boolean;
+}
+
+export interface UpdatePackageData extends Partial<CreatePackageData> {}
+
+export interface Payment {
+  id: number;
+  parent_id: number;
+  package_id: number;
+  amount: number | string; // Can be string from API (e.g., "50.00")
+  payment_slip_path?: string;
+  payment_slip_url?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_notes?: string;
+  approved_by?: number;
+  approved_at?: string;
+  created_at: string;
+  updated_at: string;
+  parent?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  package?: Package;
+  approver?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+}
 

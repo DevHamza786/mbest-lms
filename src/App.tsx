@@ -9,6 +9,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MainLayout } from "@/components/common/MainLayout";
 import { ScrollManager } from "@/components/common/ScrollManager";
 import { ParentProvider } from "./components/parent/ParentProvider";
+import { SubscriptionGuard } from "./components/parent/SubscriptionGuard";
 
 // Public pages
 import PublicHome from "./pages/public/PublicHome";
@@ -33,6 +34,8 @@ import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminAttendance from "./pages/admin/AdminAttendance";
 import AdminCalendar from "./pages/admin/AdminCalendar";
+import AdminPackages from "./pages/admin/AdminPackages";
+import AdminPayments from "./pages/admin/AdminPayments";
 
 // Student pages
 import StudentDashboard from "./pages/student/StudentDashboard";
@@ -73,6 +76,7 @@ import ParentNotifications from "./pages/parent/ParentNotifications";
 import ParentProfile from "./pages/parent/ParentProfile";
 import ParentAttendance from "./pages/parent/ParentAttendance";
 import ParentLessonHistory from "./pages/parent/ParentLessonHistory";
+import ParentSubscription from "./pages/parent/ParentSubscription";
 
 // Profile pages
 import ProfileSettings from "./pages/profile/ProfileSettings";
@@ -154,6 +158,16 @@ const App = () => (
                     <Route path="attendance" element={
                       <ProtectedRoute allowedRoles={['admin']}>
                         <AdminAttendance />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="packages" element={
+                      <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminPackages />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="payments" element={
+                      <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminPayments />
                       </ProtectedRoute>
                     } />
                     <Route path="profile" element={
@@ -309,67 +323,79 @@ const App = () => (
               </AuthGuard>
             } />
             
+            {/* Parent Subscription Page - Standalone (no portal sidebar) */}
+            <Route path="/parent/subscription" element={
+              <AuthGuard>
+                <ProtectedRoute allowedRoles={['parent']}>
+                  <ParentSubscription />
+                </ProtectedRoute>
+              </AuthGuard>
+            } />
+            
+            {/* Parent Portal Routes - Only accessible with active subscription */}
             <Route path="/parent/*" element={
               <AuthGuard>
                 <MainLayout>
                   <ParentProvider>
-                    <Routes>
-                      <Route index element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentDashboard />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="classes" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentClasses />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="assignments" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentAssignments />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="grades" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentGrades />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="resources" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentResources />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="billing" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentBilling />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="messages" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentMessages />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="notifications" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentNotifications />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="attendance" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentAttendance />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="lesson-history" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentLessonHistory />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="profile" element={
-                        <ProtectedRoute allowedRoles={['parent']}>
-                          <ParentProfile />
-                        </ProtectedRoute>
-                      } />
-                    </Routes>
+                    <SubscriptionGuard>
+                      <Routes>
+                        <Route index element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentDashboard />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="classes" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentClasses />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="assignments" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentAssignments />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="grades" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentGrades />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="resources" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentResources />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="billing" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentBilling />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="messages" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentMessages />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="notifications" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentNotifications />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="attendance" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentAttendance />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="lesson-history" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentLessonHistory />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="profile" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentProfile />
+                          </ProtectedRoute>
+                        } />
+                      </Routes>
+                    </SubscriptionGuard>
                   </ParentProvider>
                 </MainLayout>
               </AuthGuard>
