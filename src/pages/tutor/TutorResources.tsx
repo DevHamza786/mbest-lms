@@ -380,14 +380,14 @@ export default function TutorResources() {
               Add Resource
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[525px]">
+          <DialogContent className="sm:max-w-[525px] max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>Add New Resource</DialogTitle>
               <DialogDescription>
                 Upload or link to educational resources for your students
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-1">
               <div className="space-y-2">
                 <Label htmlFor="title">Resource Title *</Label>
                 <Input
