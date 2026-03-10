@@ -10,3 +10,4 @@ export { default as TutorCalendar } from './TutorCalendar';
 export { default as TutorHours } from './TutorHours';
 export { default as TutorAvailability } from './TutorAvailability';
 export { default as TutorLessonRequests } from './TutorLessonRequests';
+export { default as TutorQuestions } from './TutorQuestions';

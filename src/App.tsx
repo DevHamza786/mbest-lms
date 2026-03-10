@@ -63,6 +63,7 @@ import TutorAvailability from "./pages/tutor/TutorAvailability";
 import TutorLessonRequests from "./pages/tutor/TutorLessonRequests";
 import TutorLessonHistory from "./pages/tutor/TutorLessonHistory";
 import TutorProfile from "./pages/tutor/TutorProfile";
+import TutorQuestions from "./pages/tutor/TutorQuestions";
 
 // Parent pages
 import ParentDashboard from "./pages/parent/ParentDashboard";
@@ -281,6 +282,11 @@ const App = () => (
                     <Route path="lesson-requests" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
                         <TutorLessonRequests />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="questions" element={
+                      <ProtectedRoute allowedRoles={['tutor']}>
+                        <TutorQuestions />
                       </ProtectedRoute>
                     } />
                     <Route path="lesson-history" element={

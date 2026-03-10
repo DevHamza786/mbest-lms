@@ -16,7 +16,8 @@ import {
   Clock,
   ClipboardList,
   Package,
-  Wallet
+  Wallet,
+  HelpCircle
 } from 'lucide-react';
 import { UserRole } from '@/lib/types/auth';
 
@@ -172,6 +173,12 @@ export const navByRole: Record<UserRole, NavSection[]> = {
           icon: Bell, 
           label: 'Lesson Requests',
           description: 'Review incoming requests',
+        },
+        { 
+          href: '/tutor/questions', 
+          icon: HelpCircle, 
+          label: 'Questions',
+          description: 'Student questions and answers',
         },
       ]
     },
