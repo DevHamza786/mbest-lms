@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Plus, Download, CreditCard, DollarSign, Users, Calendar, Edit, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Search, Plus, Download, CreditCard, DollarSign, Users, Calendar, Edit, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Table, 
   TableBody, 
@@ -31,6 +30,8 @@ export default function AdminBilling() {
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  /** Synced from searchTerm after debounce — used for API `search` param */
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -41,180 +42,114 @@ export default function AdminBilling() {
   const [total, setTotal] = useState(0);
   const [lastPage, setLastPage] = useState(1);
   const perPage = 15;
-  
-  // Statistics
+  const searchDebounceReady = useRef(false);
+
+  // Statistics (from GET /admin/billing/summary)
   const [stats, setStats] = useState({
     total_revenue: 0,
     pending_amount: 0,
+    pending_count: 0,
     overdue_amount: 0,
+    overdue_count: 0,
     active_students: 0,
-    parent_payment_revenue: 0,
+    revenue_change_percent_vs_last_month: 0,
+    new_students_this_month: 0,
   });
-  
-  // Parent payments state
-  const [parentPayments, setParentPayments] = useState<AdminInvoice[]>([]);
-  const [parentPaymentsLoading, setParentPaymentsLoading] = useState(false);
 
-  // Package stats (active packages, students per package, revenue)
-  const [packageStats, setPackageStats] = useState<{
-    packages: Array<{ id: number; name: string; price: string | number; active_students: number; revenue: number }>;
-    total_revenue_from_packages: number;
-    total_active_students: number;
-  }>({ packages: [], total_revenue_from_packages: 0, total_active_students: 0 });
-  const [packageStatsLoading, setPackageStatsLoading] = useState(false);
-
-  // Fetch invoices
-  const fetchInvoices = async () => {
+  const fetchInvoices = useCallback(async () => {
     try {
       setLoading(true);
-      const params: any = {
+      const params: Record<string, unknown> = {
         page: currentPage,
         per_page: perPage,
       };
-      
+
       if (statusFilter !== 'all') {
         params.status = statusFilter;
       }
-      
-      if (searchTerm) {
-        params.search = searchTerm;
+
+      const q = debouncedSearch.trim();
+      if (q) {
+        params.search = q;
       }
-      
-      const response = await adminApi.getInvoices(params);
+
+      const response = await adminApi.getInvoices(params as Parameters<typeof adminApi.getInvoices>[0]);
       setInvoices(response.invoices);
       setTotal(response.total);
       setLastPage(response.last_page);
       setCurrentPage(response.current_page);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch invoices';
       console.error('Error fetching invoices:', error);
       toast({
-        title: "Error",
-        description: error.message || 'Failed to fetch invoices',
-        variant: "destructive",
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
       });
       setInvoices([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, debouncedSearch, statusFilter, toast]);
 
-  // Fetch parent payments
-  const fetchParentPayments = async () => {
-    try {
-      setParentPaymentsLoading(true);
-      const response = await adminApi.getInvoices({ 
-        per_page: 1000,
-        // Filter for invoices with parent_id (parent payments)
-      });
-      
-      // Filter invoices that have parent_id and are paid (parent payments)
-      const parentPaidInvoices = response.invoices.filter(
-        inv => inv.parent_id && inv.status === 'paid'
-      );
-      
-      setParentPayments(parentPaidInvoices);
-    } catch (error: any) {
-      console.error('Error fetching parent payments:', error);
-      toast({
-        title: "Error",
-        description: error.message || 'Failed to fetch parent payments',
-        variant: "destructive",
-      });
-      setParentPayments([]);
-    } finally {
-      setParentPaymentsLoading(false);
-    }
-  };
-
-  // Fetch statistics
-  const fetchStats = async () => {
+  const fetchBillingSummary = useCallback(async () => {
     try {
       setStatsLoading(true);
-      const invoices = await adminApi.getInvoices({ per_page: 1000 });
-      const totalRevenue = invoices.invoices
-        .filter(inv => inv.status === 'paid')
-        .reduce((sum, inv) => sum + parseFloat(String(inv.amount)), 0);
-      const pendingAmount = invoices.invoices
-        .filter(inv => inv.status === 'pending')
-        .reduce((sum, inv) => sum + parseFloat(String(inv.amount)), 0);
-      const overdueAmount = invoices.invoices
-        .filter(inv => inv.status === 'overdue')
-        .reduce((sum, inv) => sum + parseFloat(String(inv.amount)), 0);
-      
-      // Calculate parent payment revenue (paid invoices with parent_id)
-      const parentPaymentRevenue = invoices.invoices
-        .filter(inv => inv.parent_id && inv.status === 'paid')
-        .reduce((sum, inv) => sum + parseFloat(String(inv.amount)), 0);
-      
-      const userStats = await adminApi.getUserStats();
-      
+      const data = await adminApi.getBillingSummary();
       setStats({
-        total_revenue: totalRevenue,
-        pending_amount: pendingAmount,
-        overdue_amount: overdueAmount,
-        active_students: userStats.students,
-        parent_payment_revenue: parentPaymentRevenue,
+        total_revenue: data.total_revenue,
+        pending_amount: data.pending_amount,
+        pending_count: data.pending_count,
+        overdue_amount: data.overdue_amount,
+        overdue_count: data.overdue_count,
+        active_students: data.active_students,
+        revenue_change_percent_vs_last_month: data.revenue_change_percent_vs_last_month,
+        new_students_this_month: data.new_students_this_month,
       });
-    } catch (error: any) {
-      console.error('Error fetching stats:', error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load billing summary';
+      console.error('Error fetching billing summary:', error);
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
+      });
     } finally {
       setStatsLoading(false);
     }
-  };
+  }, [toast]);
 
-  const fetchPackageStats = async () => {
-    try {
-      setPackageStatsLoading(true);
-      const data = await adminApi.getPackageStats();
-      setPackageStats(data);
-    } catch (e) {
-      console.error('Error fetching package stats:', e);
-    } finally {
-      setPackageStatsLoading(false);
-    }
-  };
-
-  // Initial load
+  // Debounce search; reset to page 1 when query changes (skip first sync to avoid extra pagination reset)
   useEffect(() => {
-    fetchInvoices();
-    fetchStats();
-    fetchParentPayments();
-    fetchPackageStats();
+    const delay = searchTerm === '' ? 0 : 400;
+    const id = window.setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      if (searchDebounceReady.current) {
+        setCurrentPage(1);
+      }
+      searchDebounceReady.current = true;
+    }, delay);
+    return () => window.clearTimeout(id);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchBillingSummary();
   }, []);
 
-  // Refetch when filters change
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setCurrentPage(1);
-      fetchInvoices();
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, statusFilter]);
-
-  // Refetch when page changes
   useEffect(() => {
     fetchInvoices();
-  }, [currentPage]);
+  }, [fetchInvoices]);
 
-  // Filter invoices client-side for search (since backend might not support search)
-  const filteredInvoices = useMemo(() => {
-    if (!searchTerm) return invoices;
-    
-    return invoices.filter(invoice => {
-      const studentName = invoice.student?.user?.name || '';
-      const tutorName = invoice.tutor?.user?.name || '';
-      const parentName = invoice.parent?.name || '';
-      const invoiceNumber = invoice.invoice_number || '';
-      
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        studentName.toLowerCase().includes(searchLower) ||
-        tutorName.toLowerCase().includes(searchLower) ||
-        parentName.toLowerCase().includes(searchLower) ||
-        invoiceNumber.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [invoices, searchTerm]);
+  // If admin creates invoices from calendar, refresh the billing page automatically.
+  useEffect(() => {
+    const handler = () => {
+      fetchBillingSummary();
+      fetchInvoices();
+    };
+
+    window.addEventListener('billing:refresh', handler);
+    return () => window.removeEventListener('billing:refresh', handler);
+  }, [fetchBillingSummary, fetchInvoices]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -308,7 +243,7 @@ export default function AdminBilling() {
       });
       setIsCreateModalOpen(false);
       fetchInvoices();
-      fetchStats();
+      fetchBillingSummary();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -336,7 +271,7 @@ export default function AdminBilling() {
       setIsEditModalOpen(false);
       setSelectedInvoice(null);
       fetchInvoices();
-      fetchStats();
+      fetchBillingSummary();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -351,13 +286,6 @@ export default function AdminBilling() {
     setIsEditModalOpen(true);
   };
 
-  const handleSendReminder = (invoiceId: number) => {
-    toast({
-      title: "Reminder Sent",
-      description: "Payment reminder has been sent to the parent/student.",
-    });
-  };
-
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -365,7 +293,7 @@ export default function AdminBilling() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Billing & Revenue</h1>
           <p className="text-muted-foreground">
-            Manage subscription plans, invoices, and financial operations
+            Manage invoices and financial operations
           </p>
         </div>
         <Button onClick={() => setIsCreateModalOpen(true)}>
@@ -386,9 +314,19 @@ export default function AdminBilling() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             ) : (
               <>
-                <div className="text-2xl font-bold">${stats.total_revenue.toLocaleString()}</div>
+                <div className="text-2xl font-bold">${stats.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <p className="text-xs text-muted-foreground">
-                  <span className="text-green-500">+18%</span> from last month
+                  <span
+                    className={
+                      stats.revenue_change_percent_vs_last_month >= 0
+                        ? 'text-green-600'
+                        : 'text-destructive'
+                    }
+                  >
+                    {stats.revenue_change_percent_vs_last_month >= 0 ? '+' : ''}
+                    {stats.revenue_change_percent_vs_last_month.toFixed(1)}%
+                  </span>{' '}
+                  vs last month (paid revenue)
                 </p>
               </>
             )}
@@ -405,9 +343,9 @@ export default function AdminBilling() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             ) : (
               <>
-                <div className="text-2xl font-bold">${stats.pending_amount.toLocaleString()}</div>
+                <div className="text-2xl font-bold">${stats.pending_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <p className="text-xs text-muted-foreground">
-                  {invoices.filter(inv => inv.status === 'pending').length} invoices
+                  {stats.pending_count} invoice{stats.pending_count === 1 ? '' : 's'}
                 </p>
               </>
             )}
@@ -424,9 +362,9 @@ export default function AdminBilling() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             ) : (
               <>
-                <div className="text-2xl font-bold">${stats.overdue_amount.toLocaleString()}</div>
+                <div className="text-2xl font-bold">${stats.overdue_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <p className="text-xs text-muted-foreground">
-                  {invoices.filter(inv => inv.status === 'overdue').length} overdue invoices
+                  {stats.overdue_count} overdue invoice{stats.overdue_count === 1 ? '' : 's'}
                 </p>
               </>
             )}
@@ -445,7 +383,7 @@ export default function AdminBilling() {
               <>
                 <div className="text-2xl font-bold">{stats.active_students}</div>
                 <p className="text-xs text-muted-foreground">
-                  <span className="text-green-500">+12</span> new this month
+                  {stats.new_students_this_month} new this month
                 </p>
               </>
             )}
@@ -453,14 +391,7 @@ export default function AdminBilling() {
         </Card>
       </div>
 
-      <Tabs defaultValue="invoices" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="invoices">Invoices</TabsTrigger>
-          <TabsTrigger value="parent-payments">Parent Payments</TabsTrigger>
-          <TabsTrigger value="plans">Subscription Plans</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="invoices" className="space-y-6">
+      <div className="space-y-6">
           {/* Invoice Filters */}
           <div className="flex gap-4">
             <div className="relative flex-1">
@@ -472,7 +403,13 @@ export default function AdminBilling() {
                 className="pl-10"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => {
+                setStatusFilter(v);
+                setCurrentPage(1);
+              }}
+            >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
@@ -484,10 +421,6 @@ export default function AdminBilling() {
                 <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline">
-              <Filter className="mr-2 h-4 w-4" />
-              More Filters
-            </Button>
           </div>
 
           {/* Invoices Table */}
@@ -520,14 +453,14 @@ export default function AdminBilling() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredInvoices.length === 0 ? (
+                      {invoices.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                             No invoices found
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredInvoices.map((invoice) => (
+                        invoices.map((invoice) => (
                           <TableRow key={invoice.id}>
                             <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
                             <TableCell className="text-muted-foreground text-sm">
@@ -569,15 +502,6 @@ export default function AdminBilling() {
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
-                                {invoice.status === 'pending' && !invoice.tutor_id && (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm"
-                                    onClick={() => handleSendReminder(invoice.id)}
-                                  >
-                                    Send Reminder
-                                  </Button>
-                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -616,228 +540,7 @@ export default function AdminBilling() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="parent-payments" className="space-y-6">
-          {/* Summary Stats Cards */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{parentPayments.length}</div>
-                <p className="text-xs text-muted-foreground">Paid invoices from parents</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  ${stats.parent_payment_revenue.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">From parent payments</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Average Payment</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  ${parentPayments.length > 0 
-                    ? (stats.parent_payment_revenue / parentPayments.length).toFixed(2)
-                    : '0.00'}
-                </div>
-                <p className="text-xs text-muted-foreground">Per invoice</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>Parent Payments</CardTitle>
-                <CardDescription>
-                  Track all payments received from parents and their contribution to revenue
-                </CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {parentPaymentsLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Invoice ID</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Parent Name</TableHead>
-                        <TableHead>Student Name</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Payment Date</TableHead>
-                        <TableHead>Payment Method</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {parentPayments.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                            No parent payments found
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        parentPayments.map((payment) => (
-                          <TableRow key={payment.id}>
-                            <TableCell className="font-medium">{payment.invoice_number}</TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
-                              {payment.created_at ? new Date(payment.created_at).toLocaleDateString() : '–'}
-                            </TableCell>
-                            <TableCell>{payment.parent?.name || '-'}</TableCell>
-                            <TableCell>{payment.student?.user?.name || '-'}</TableCell>
-                            <TableCell className="font-semibold">
-                              ${parseFloat(String(payment.amount)).toLocaleString()}
-                            </TableCell>
-                            <TableCell>
-                              {payment.paid_date 
-                                ? new Date(payment.paid_date).toLocaleDateString()
-                                : new Date(payment.issue_date).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              {payment.payment_method || 'N/A'}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={getStatusColor(payment.status)}>
-                                {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => handleDownloadInvoice(payment)}
-                                  title="Download Invoice"
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => handleOpenEdit(payment)}
-                                  title="View Details"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="plans" className="space-y-6">
-          {packageStatsLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">Total Revenue (Subscription plans)</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">${packageStats.total_revenue_from_packages.toLocaleString()}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">Total Active Students (Subscription plans)</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{packageStats.total_active_students}</div>
-                  </CardContent>
-                </Card>
-              </div>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Active Subscription plans</CardTitle>
-                  <CardDescription>Active plans with student count and revenue</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {packageStats.packages.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">No active subscription plans</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Subscription plan</TableHead>
-                          <TableHead>Price</TableHead>
-                          <TableHead>Active Students</TableHead>
-                          <TableHead>Revenue</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {packageStats.packages.map((pkg) => (
-                          <TableRow key={pkg.id}>
-                            <TableCell className="font-medium">{pkg.name}</TableCell>
-                            <TableCell>${typeof pkg.price === 'string' ? parseFloat(pkg.price).toFixed(2) : pkg.price}</TableCell>
-                            <TableCell>{pkg.active_students}</TableCell>
-                            <TableCell>${pkg.revenue.toLocaleString()}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-              {packageStats.packages.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Revenue by Subscription plan</CardTitle>
-                    <CardDescription>Revenue distribution across package plans</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {packageStats.packages.map((pkg) => {
-                        const total = packageStats.total_revenue_from_packages || 1;
-                        const percentage = (pkg.revenue / total) * 100;
-                        return (
-                          <div key={pkg.id} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-3 h-3 rounded-full bg-primary"></div>
-                              <span className="font-medium">{pkg.name}</span>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium">${pkg.revenue.toLocaleString()}</p>
-                              <p className="text-sm text-muted-foreground">{percentage.toFixed(1)}%</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          )}
-        </TabsContent>
-      </Tabs>
+      </div>
 
       {/* Create Invoice Modal */}
       <CreateEditInvoiceModal

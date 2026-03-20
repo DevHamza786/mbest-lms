@@ -247,10 +247,30 @@ export const adminApi = {
   },
 
   async getTutor(tutorId: number): Promise<{ id: number; user_id: number; hourly_rate?: number; user: { id: number; name: string; email: string } }> {
-    const response = await apiClient.get<any>(`/admin/tutors/${tutorId}`);
-    const raw = (response as any).data;
-    if (!raw) throw new Error('Tutor not found');
-    return (typeof raw === 'object' && raw.data !== undefined ? raw.data : raw) as any;
+    // Prefer dedicated tutor endpoint, but some deployments may not have it yet.
+    try {
+      const response = await apiClient.get<any>(`/admin/tutors/${tutorId}`);
+      const raw = (response as any).data;
+      if (!raw) throw new Error('Tutor not found');
+      return (typeof raw === 'object' && raw.data !== undefined ? raw.data : raw) as any;
+    } catch (e) {
+      // Fallback: fetch tutor relation through user endpoint.
+      const response = await apiClient.get<any>(`/admin/users/${tutorId}`);
+      const raw = (response as any).data;
+      const tutor = raw?.tutor;
+      if (!tutor) throw new Error('Tutor not found');
+
+      return {
+        id: tutor.id ?? tutorId,
+        user_id: tutor.user_id ?? raw?.id,
+        hourly_rate: tutor.hourly_rate,
+        user: {
+          id: tutor.user?.id ?? raw?.id ?? tutorId,
+          name: tutor.user?.name ?? raw?.name ?? 'Unknown',
+          email: tutor.user?.email ?? raw?.email ?? '',
+        },
+      } as any;
+    }
   },
 
   async getUser(id: number): Promise<AdminUser> {
@@ -375,6 +395,49 @@ export const adminApi = {
       };
     }
     return { packages: [], total_revenue_from_packages: 0, total_active_students: 0 };
+  },
+
+  /** Aggregated billing KPIs (invoices + users) — replaces client-side dummy totals */
+  async getBillingSummary(): Promise<{
+    total_revenue: number;
+    pending_amount: number;
+    pending_count: number;
+    overdue_amount: number;
+    overdue_count: number;
+    active_students: number;
+    revenue_change_percent_vs_last_month: number;
+    paid_revenue_this_month: number;
+    paid_revenue_last_month: number;
+    new_students_this_month: number;
+  }> {
+    const response = await apiClient.get<any>('/admin/billing/summary');
+    if (response.success && (response as any).data) {
+      const d = (response as any).data;
+      return {
+        total_revenue: Number(d.total_revenue ?? 0),
+        pending_amount: Number(d.pending_amount ?? 0),
+        pending_count: Number(d.pending_count ?? 0),
+        overdue_amount: Number(d.overdue_amount ?? 0),
+        overdue_count: Number(d.overdue_count ?? 0),
+        active_students: Number(d.active_students ?? 0),
+        revenue_change_percent_vs_last_month: Number(d.revenue_change_percent_vs_last_month ?? 0),
+        paid_revenue_this_month: Number(d.paid_revenue_this_month ?? 0),
+        paid_revenue_last_month: Number(d.paid_revenue_last_month ?? 0),
+        new_students_this_month: Number(d.new_students_this_month ?? 0),
+      };
+    }
+    return {
+      total_revenue: 0,
+      pending_amount: 0,
+      pending_count: 0,
+      overdue_amount: 0,
+      overdue_count: 0,
+      active_students: 0,
+      revenue_change_percent_vs_last_month: 0,
+      paid_revenue_this_month: 0,
+      paid_revenue_last_month: 0,
+      new_students_this_month: 0,
+    };
   },
 
   async getInvoices(params?: {

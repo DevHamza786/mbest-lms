@@ -439,6 +439,7 @@ export default function AdminCalendar() {
   const handleConfirmInvoicePreview = async (session: Session) => {
     try {
       const updatedSession = await adminApi.markSessionReadyForInvoicing(parseInt(session.id));
+      const invoiceNumber = (updatedSession as any)?.invoice_number as string | undefined;
       const mappedSession = mapAdminSessionToSession(updatedSession);
 
       setSessions(sessions.map(s => s.id === session.id ? mappedSession : s));
@@ -447,9 +448,15 @@ export default function AdminCalendar() {
       }
 
       toast({
-        title: 'Ready for Invoicing',
-        description: 'Session marked ready for invoicing',
+        title: invoiceNumber ? 'Invoice Created' : 'Ready for Invoicing',
+        description: invoiceNumber
+          ? `Session marked ready and invoice created: ${invoiceNumber}`
+          : 'Session marked ready for invoicing',
       });
+
+      // Let AdminBilling refresh automatically (if open).
+      window.dispatchEvent(new CustomEvent('billing:refresh'));
+
       setSessionForInvoicePreview(null);
       setIsDetailOpen(false);
     } catch (error) {

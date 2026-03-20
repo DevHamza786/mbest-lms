@@ -72,9 +72,35 @@ export function detectSessionConflicts(
 
 // Calculate duration in hours
 export function calculateDuration(startTime: string, endTime: string): number {
-  const start = parse(startTime, 'HH:mm', new Date());
-  const end = parse(endTime, 'HH:mm', new Date());
-  return (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+  if (!startTime || !endTime) return 0;
+
+  // Expect either "HH:mm" or "HH:mm:ss" (sometimes backend provides seconds).
+  const timeToSeconds = (timeStr: string): number | null => {
+    const trimmed = String(timeStr).trim();
+    const parts = trimmed.split(':');
+    if (parts.length < 2) return null;
+
+    const [hhRaw, mmRaw, ssRaw] = parts;
+    const hh = parseInt(hhRaw, 10);
+    const mm = parseInt(mmRaw, 10);
+    const ss = ssRaw !== undefined ? parseInt(ssRaw, 10) : 0;
+
+    if (Number.isNaN(hh) || Number.isNaN(mm) || Number.isNaN(ss)) return null;
+    if (mm < 0 || mm > 59) return null;
+    if (ss < 0 || ss > 59) return null;
+
+    return hh * 3600 + mm * 60 + ss;
+  };
+
+  const startSeconds = timeToSeconds(startTime);
+  const endSeconds = timeToSeconds(endTime);
+  if (startSeconds == null || endSeconds == null) return 0;
+
+  const diffSeconds = endSeconds - startSeconds;
+  // If end is before start (e.g., bad input), don't show NaN; treat as 0 hours.
+  if (diffSeconds <= 0) return 0;
+
+  return diffSeconds / 3600;
 }
 
 // Format time for display
