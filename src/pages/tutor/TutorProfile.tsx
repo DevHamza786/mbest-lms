@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { User, Mail, Phone, MapPin, Camera, Save, Eye, EyeOff } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,11 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useSession } from '@/lib/store/authStore';
+import { commonApi } from '@/lib/api';
 
 export default function TutorProfile() {
   const session = useSession();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [isSavingEmployment, setIsSavingEmployment] = useState(false);
   
   const [profileData, setProfileData] = useState({
     name: session?.name || '',
@@ -41,6 +43,40 @@ export default function TutorProfile() {
     compactView: false,
     autoSave: true,
   });
+
+  const parseSpecializations = (raw: string) => {
+    const parts = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // Deduplicate while preserving order
+    return Array.from(new Set(parts));
+  };
+
+  const [specializationsText, setSpecializationsText] = useState('');
+  const specializations = useMemo(
+    () => parseSpecializations(specializationsText),
+    [specializationsText]
+  );
+
+  useEffect(() => {
+    // Load tutor profile so the specialization list can be edited.
+    // (TutorProfile.tsx is tutor-portal specific; it doesn't use ProfileSettings.tsx.)
+    const load = async () => {
+      try {
+        const profile = await commonApi.profile.get();
+        const existing = (profile as any)?.tutor?.specialization;
+        if (Array.isArray(existing)) {
+          setSpecializationsText(existing.join(', '));
+        }
+      } catch (e: any) {
+        console.error('Failed to load tutor profile:', e);
+      }
+    };
+
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleProfileUpdate = () => {
     toast({
@@ -77,6 +113,31 @@ export default function TutorProfile() {
       title: "Preferences Updated",
       description: "Your notification and display preferences have been saved.",
     });
+  };
+
+  const handleEmploymentUpdate = async () => {
+    try {
+      setIsSavingEmployment(true);
+
+      // Persist specializations as an array (comma input -> array).
+      await commonApi.profile.update({
+        specialization: specializations.length ? specializations : [],
+      });
+
+      toast({
+        title: 'Saved',
+        description: 'Tutor specializations updated successfully.',
+      });
+    } catch (e: any) {
+      console.error('Failed to save employment details:', e);
+      toast({
+        title: 'Error',
+        description: e?.message || 'Failed to update specializations',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingEmployment(false);
+    }
   };
 
   return (
@@ -317,12 +378,37 @@ export default function TutorProfile() {
                 <Textarea
                   id="subjects"
                   rows={3}
-                  defaultValue="HSC Maths Advanced, HSC Maths Extension 1, HSC Maths Standard, Y7-10 Maths"
+                    value={specializationsText}
+                    onChange={(e) => setSpecializationsText(e.target.value)}
                   placeholder="List your teaching subjects..."
                 />
-                <p className="text-sm text-muted-foreground">
-                  Comma-separated list of subjects you are qualified to teach
-                </p>
+                  <p className="text-sm text-muted-foreground">
+                    Comma-separated list (e.g., `Mathematics, English`)
+                  </p>
+
+                  {specializations.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {specializations.map((s) => (
+                        <Badge key={s} variant="secondary" className="gap-1">
+                          {s}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSpecializationsText(
+                                specializations
+                                  .filter((x) => x !== s)
+                                  .join(', ')
+                              )
+                            }
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label={`Remove ${s}`}
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
               </div>
 
               <div className="space-y-2">
@@ -341,7 +427,7 @@ export default function TutorProfile() {
                 </p>
               </div>
 
-              <Button onClick={handleProfileUpdate}>
+              <Button onClick={handleEmploymentUpdate} disabled={isSavingEmployment}>
                 <Save className="mr-2 h-4 w-4" />
                 Save Employment Details
               </Button>

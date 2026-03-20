@@ -207,6 +207,17 @@ export default function AdminUsers() {
         return;
       }
 
+      const isValidPassword =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/.test(addUserForm.password);
+      if (!isValidPassword) {
+        toast({
+          title: "Validation Error",
+          description: "Password must include uppercase, lowercase, a number, and a special character.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       await adminApi.createUser({
         name: `${addUserForm.firstName} ${addUserForm.lastName}`,
         email: addUserForm.email,
@@ -288,6 +299,19 @@ export default function AdminUsers() {
       toast({
         title: "Validation Error",
         description: "Password must be at least 8 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const isValidPassword =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/.test(
+        resetPasswordForm.password
+      );
+    if (!isValidPassword) {
+      toast({
+        title: "Validation Error",
+        description: "Password must include uppercase, lowercase, a number, and a special character.",
         variant: "destructive",
       });
       return;
@@ -771,7 +795,7 @@ export default function AdminUsers() {
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <CardTitle className="text-lg">{student.name}</CardTitle>
+                          <CardTitle className="text-lg">{student.name}{student.student?.grade ? ` – ${student.student.grade}` : ''}</CardTitle>
                           <CardDescription>{student.email}</CardDescription>
                         </div>
                       </div>

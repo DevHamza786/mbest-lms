@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { User, Mail, Phone, MapPin, Camera, Save, Eye, EyeOff, Briefcase, GraduationCap, DollarSign, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,9 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useSession } from '@/lib/store/authStore';
 import { commonApi } from '@/lib/api';
+import { tutorApi, TutorAvailability as TutorAvailabilityType } from '@/lib/api/tutor';
 
 export default function ProfileSettings() {
   const session = useSession();
@@ -22,6 +25,23 @@ export default function ProfileSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  const getTodayISO = () => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  const todayISO = getTodayISO();
+  const normalizePhone = (value: string) => value.replace(/[\s-]/g, '');
+  const isValidAusPhone = (value: string) => /^\+61\d{9}$/.test(normalizePhone(value));
+  const isFutureDOB = (value: string) => {
+    const date = new Date(value + 'T00:00:00');
+    const today = new Date(todayISO + 'T00:00:00');
+    return date.getTime() > today.getTime();
+  };
+  const isInvalidEmailDomain = (value: string) => value.toLowerCase().endsWith('.comm');
   
   const [profileData, setProfileData] = useState({
     name: '',
@@ -37,15 +57,68 @@ export default function ProfileSettings() {
     emergency_contact_name: '',
     emergency_contact_phone: '',
     // Tutor-specific fields
-    department: '',
     specialization: [] as string[],
+    subject_year_mapping: {} as Record<string, string[]>,
     hourly_rate: '',
     qualifications: '',
     experience_years: '',
+    wwcc_number: '',
+    wwcc_expiry_date: '',
+    max_students_per_group: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+
+  const [availabilitySlots, setAvailabilitySlots] = useState<TutorAvailabilityType[]>([]);
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
+
+  const tutorYearLevels = Array.from({ length: 12 }, (_, i) => String(i + 1)); // "1".."12"
+  const defaultTutorSubjects = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Computer Science'];
+  const tutorSubjectOptions = Array.from(
+    new Set([...(profileData.specialization || []), ...defaultTutorSubjects])
+  ).sort();
+
+  const sortYearNumbers = (years: string[]) =>
+    years.slice().sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+
+  const toggleTutorSubject = (subject: string, checked: boolean) => {
+    setProfileData(prev => {
+      const nextSubjects = checked
+        ? Array.from(new Set([...(prev.specialization || []), subject]))
+        : (prev.specialization || []).filter(s => s !== subject);
+
+      const nextMapping = { ...(prev.subject_year_mapping || {}) };
+      if (!checked) {
+        delete nextMapping[subject];
+      } else if (!nextMapping[subject]) {
+        nextMapping[subject] = [];
+      }
+
+      return {
+        ...prev,
+        specialization: nextSubjects,
+        subject_year_mapping: nextMapping,
+      };
+    });
+  };
+
+  const toggleTutorYearForSubject = (subject: string, year: string, checked: boolean) => {
+    setProfileData(prev => {
+      const nextMapping = { ...(prev.subject_year_mapping || {}) };
+      const currentYears = new Set(nextMapping[subject] || []);
+
+      if (checked) currentYears.add(year);
+      else currentYears.delete(year);
+
+      nextMapping[subject] = sortYearNumbers(Array.from(currentYears));
+
+      return {
+        ...prev,
+        subject_year_mapping: nextMapping,
+      };
+    });
+  };
 
   const [preferences, setPreferences] = useState({
     emailNotifications: true,
@@ -77,6 +150,20 @@ export default function ProfileSettings() {
             console.error('Error parsing date:', e);
           }
         }
+
+        // Format WWCC expiry date from ISO string to YYYY-MM-DD for date input
+        let formattedWWCCExpiry = '';
+        const rawWWCCExpiry = (profile as any).tutor?.wwcc_expiry_date;
+        if (rawWWCCExpiry) {
+          try {
+            const d = new Date(rawWWCCExpiry);
+            if (!isNaN(d.getTime())) {
+              formattedWWCCExpiry = d.toISOString().split('T')[0];
+            }
+          } catch (e) {
+            console.error('Error parsing WWCC expiry date:', e);
+          }
+        }
         
         setProfileData({
           name: profile.name || '',
@@ -92,13 +179,20 @@ export default function ProfileSettings() {
           emergency_contact_phone: (profile as any).student?.emergency_contact_phone || '',
           // Tutor-specific fields
           bio: (profile as any).tutor?.bio || '',
-          department: (profile as any).tutor?.department || '',
           specialization: Array.isArray((profile as any).tutor?.specialization) 
             ? (profile as any).tutor.specialization 
             : [],
+          subject_year_mapping: (profile as any).tutor?.subject_year_mapping || {},
           hourly_rate: (profile as any).tutor?.hourly_rate ? String((profile as any).tutor.hourly_rate) : '',
           qualifications: (profile as any).tutor?.qualifications || '',
           experience_years: (profile as any).tutor?.experience_years ? String((profile as any).tutor.experience_years) : '',
+          wwcc_number: (profile as any).tutor?.wwcc_number || '',
+          wwcc_expiry_date: formattedWWCCExpiry,
+          max_students_per_group:
+            (profile as any).tutor?.max_students_per_group !== undefined &&
+            (profile as any).tutor?.max_students_per_group !== null
+              ? String((profile as any).tutor.max_students_per_group)
+              : '',
           currentPassword: '',
           newPassword: '',
           confirmPassword: '',
@@ -132,12 +226,13 @@ export default function ProfileSettings() {
           // Also update in localStorage
           const { getStorageItem, setStorageItem, STORAGE_KEYS } = await import('@/lib/utils/storage');
           const stored = getStorageItem(STORAGE_KEYS.SESSION);
-          if (stored) {
+          if (stored && typeof stored === 'object') {
+            const storedObj = stored as any;
             setStorageItem(STORAGE_KEYS.SESSION, {
-              ...stored,
-              name: profile.name || stored.name,
-              email: profile.email || stored.email,
-              avatar: profile.avatar || stored.avatar,
+              ...storedObj,
+              name: profile.name || storedObj.name,
+              email: profile.email || storedObj.email,
+              avatar: profile.avatar || storedObj.avatar,
             });
           }
         }
@@ -155,6 +250,31 @@ export default function ProfileSettings() {
 
     loadProfile();
   }, [toast]);
+
+  // Load tutor availability slots to show onboarding completeness on the profile page.
+  useEffect(() => {
+    if (session?.role !== 'tutor') return;
+
+    let cancelled = false;
+    const loadAvailability = async () => {
+      setIsLoadingAvailability(true);
+      try {
+        const slots = await tutorApi.getAvailability();
+        if (!cancelled) setAvailabilitySlots(Array.isArray(slots) ? slots : []);
+      } catch (e) {
+        console.error('Failed to load tutor availability:', e);
+        if (!cancelled) setAvailabilitySlots([]);
+      } finally {
+        if (!cancelled) setIsLoadingAvailability(false);
+      }
+    };
+
+    loadAvailability();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.role]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -201,6 +321,62 @@ export default function ProfileSettings() {
   const handleProfileUpdate = async () => {
     try {
       setIsSaving(true);
+
+      if (isInvalidEmailDomain(profileData.email)) {
+        toast({
+          title: 'Validation Error',
+          description: 'Email domain is invalid.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Validate phone format if provided
+      if (profileData.phone && !isValidAusPhone(profileData.phone)) {
+        toast({
+          title: 'Validation Error',
+          description: 'Phone must be in the format +61XXXXXXXXX.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // DOB must not be in the future (if provided)
+      if (profileData.date_of_birth && isFutureDOB(profileData.date_of_birth)) {
+        toast({
+          title: 'Validation Error',
+          description: 'Date of birth cannot be in the future.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // WWCC expiry must not be in the past (if provided)
+      if (profileData.wwcc_expiry_date) {
+        const expiryDate = new Date(profileData.wwcc_expiry_date + 'T00:00:00');
+        const today = new Date(todayISO + 'T00:00:00');
+        if (expiryDate.getTime() < today.getTime()) {
+          toast({
+            title: 'Validation Error',
+            description: 'WWCC expiry date cannot be in the past.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
+      // Validate max students per group (if provided)
+      if (profileData.max_students_per_group) {
+        const parsed = parseInt(profileData.max_students_per_group, 10);
+        if (Number.isNaN(parsed) || parsed < 1) {
+          toast({
+            title: 'Validation Error',
+            description: 'Max students per group must be a number greater than 0.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
       
       // Upload avatar first if changed
       if (avatarFile) {
@@ -211,19 +387,26 @@ export default function ProfileSettings() {
       const updateData: any = {
         name: profileData.name,
         email: profileData.email,
-        phone: profileData.phone,
+        phone: profileData.phone ? normalizePhone(profileData.phone) : undefined,
         address: profileData.address,
         date_of_birth: profileData.date_of_birth || undefined,
       };
 
       // Include tutor-specific fields if user is a tutor
       if (session?.role === 'tutor') {
-        updateData.department = profileData.department || undefined;
         updateData.specialization = profileData.specialization.length > 0 ? profileData.specialization : undefined;
+        updateData.subject_year_mapping = Object.keys(profileData.subject_year_mapping || {}).length > 0
+          ? profileData.subject_year_mapping
+          : undefined;
         updateData.hourly_rate = profileData.hourly_rate ? parseFloat(profileData.hourly_rate) : undefined;
         updateData.qualifications = profileData.qualifications || undefined;
         updateData.experience_years = profileData.experience_years ? parseInt(profileData.experience_years) : undefined;
         updateData.bio = profileData.bio || undefined;
+        updateData.wwcc_number = profileData.wwcc_number || undefined;
+        updateData.wwcc_expiry_date = profileData.wwcc_expiry_date || undefined;
+        updateData.max_students_per_group = profileData.max_students_per_group
+          ? parseInt(profileData.max_students_per_group, 10)
+          : undefined;
       }
 
       await commonApi.profile.update(updateData);
@@ -260,13 +443,30 @@ export default function ProfileSettings() {
           emergency_contact_phone: (refreshedProfile as any).student?.emergency_contact_phone || prev.emergency_contact_phone,
           // Tutor-specific fields
           bio: (refreshedProfile as any).tutor?.bio || prev.bio,
-          department: (refreshedProfile as any).tutor?.department || prev.department,
           specialization: Array.isArray((refreshedProfile as any).tutor?.specialization)
             ? (refreshedProfile as any).tutor.specialization
             : prev.specialization,
+          subject_year_mapping: (refreshedProfile as any).tutor?.subject_year_mapping || prev.subject_year_mapping,
           hourly_rate: (refreshedProfile as any).tutor?.hourly_rate ? String((refreshedProfile as any).tutor.hourly_rate) : prev.hourly_rate,
           qualifications: (refreshedProfile as any).tutor?.qualifications || prev.qualifications,
           experience_years: (refreshedProfile as any).tutor?.experience_years ? String((refreshedProfile as any).tutor.experience_years) : prev.experience_years,
+          wwcc_number: (refreshedProfile as any).tutor?.wwcc_number || prev.wwcc_number,
+          wwcc_expiry_date: (() => {
+            const raw = (refreshedProfile as any).tutor?.wwcc_expiry_date;
+            if (!raw) return prev.wwcc_expiry_date;
+            try {
+              const d = new Date(raw);
+              if (isNaN(d.getTime())) return prev.wwcc_expiry_date;
+              return d.toISOString().split('T')[0];
+            } catch {
+              return prev.wwcc_expiry_date;
+            }
+          })(),
+          max_students_per_group:
+            (refreshedProfile as any).tutor?.max_students_per_group !== undefined &&
+            (refreshedProfile as any).tutor?.max_students_per_group !== null
+              ? String((refreshedProfile as any).tutor.max_students_per_group)
+              : prev.max_students_per_group,
         }));
 
         // Update avatar preview and session
@@ -292,9 +492,10 @@ export default function ProfileSettings() {
             // Update in localStorage
             const { getStorageItem, setStorageItem, STORAGE_KEYS } = await import('@/lib/utils/storage');
             const stored = getStorageItem(STORAGE_KEYS.SESSION);
-            if (stored) {
+            if (stored && typeof stored === 'object') {
+              const storedObj = stored as any;
               setStorageItem(STORAGE_KEYS.SESSION, {
-                ...stored,
+                ...storedObj,
                 avatar: refreshedProfile.avatar,
               });
             }
@@ -333,6 +534,19 @@ export default function ProfileSettings() {
       toast({
         title: "Password too short",
         description: "Password must be at least 8 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const isValidPassword =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/.test(
+        profileData.newPassword
+      );
+    if (!isValidPassword) {
+      toast({
+        title: "Validation Error",
+        description: "Password must include uppercase, lowercase, a number, and a special character.",
         variant: "destructive",
       });
       return;
@@ -530,6 +744,7 @@ export default function ProfileSettings() {
                     type="date"
                     value={profileData.date_of_birth}
                     onChange={(e) => setProfileData(prev => ({ ...prev, date_of_birth: e.target.value }))}
+                    max={todayISO}
                   />
                 </div>
               </div>
@@ -612,20 +827,6 @@ export default function ProfileSettings() {
                 <>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="department">Department</Label>
-                      <div className="relative">
-                        <Briefcase className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="department"
-                          className="pl-10"
-                          value={profileData.department}
-                          onChange={(e) => setProfileData(prev => ({ ...prev, department: e.target.value }))}
-                          placeholder="e.g., Mathematics, Computer Science"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
                       <Label htmlFor="hourly_rate">Hourly Rate ($)</Label>
                       <div className="relative">
                         <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -652,20 +853,116 @@ export default function ProfileSettings() {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="specialization">Specialization</Label>
-                      <Input
-                        id="specialization"
-                        value={profileData.specialization.join(', ')}
-                        onChange={(e) => {
-                          const specializations = e.target.value.split(',').map(s => s.trim()).filter(s => s);
-                          setProfileData(prev => ({ ...prev, specialization: specializations }));
-                        }}
-                        placeholder="e.g., Algebra, Calculus, Geometry (comma-separated)"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Enter specializations separated by commas
-                      </p>
+                    <div className="space-y-3 md:col-span-2">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="wwcc_number">WWCC Number</Label>
+                          <Input
+                            id="wwcc_number"
+                            value={profileData.wwcc_number}
+                            onChange={(e) => setProfileData(prev => ({ ...prev, wwcc_number: e.target.value }))}
+                            placeholder="Enter WWCC number"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="wwcc_expiry_date">WWCC Expiry Date</Label>
+                          <Input
+                            id="wwcc_expiry_date"
+                            type="date"
+                            value={profileData.wwcc_expiry_date}
+                            onChange={(e) => setProfileData(prev => ({ ...prev, wwcc_expiry_date: e.target.value }))}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="max_students_per_group">Max Students per Group</Label>
+                          <Input
+                            id="max_students_per_group"
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={profileData.max_students_per_group}
+                            onChange={(e) => setProfileData(prev => ({ ...prev, max_students_per_group: e.target.value }))}
+                            placeholder="e.g. 6"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Availability Slots</Label>
+                          <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/20">
+                            {isLoadingAvailability ? (
+                              <span className="text-sm text-muted-foreground">Loading...</span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                {availabilitySlots.length > 0
+                                  ? `${availabilitySlots.length} slot(s) set`
+                                  : 'Not set yet'}
+                              </span>
+                            )}
+                            <Link to="/tutor/availability" className="ml-4">
+                              <Button variant="outline" size="sm">Manage</Button>
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 md:col-span-2">
+                      <div className="space-y-2">
+                        <Label>Subjects Taught</Label>
+                        <div className="flex flex-wrap gap-4">
+                          {tutorSubjectOptions.map((subject) => {
+                            const id = `subject-${subject.replace(/\\s+/g, '-').toLowerCase()}`;
+                            const checked = (profileData.specialization || []).includes(subject);
+                            return (
+                              <div key={subject} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={id}
+                                  checked={checked}
+                                  onCheckedChange={(v) => toggleTutorSubject(subject, !!v)}
+                                />
+                                <span className="text-sm">{subject}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 pt-2">
+                        <Label className="text-sm font-normal text-muted-foreground">
+                          Subject to year-level mapping
+                        </Label>
+
+                        {profileData.specialization.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            Select at least one subject above to enable year-level mapping.
+                          </p>
+                        ) : (
+                          profileData.specialization.map((subject) => (
+                            <div key={subject} className="space-y-2">
+                              <Label className="text-sm">{subject}</Label>
+                              <div className="flex flex-wrap gap-4">
+                                {tutorYearLevels.map((year) => {
+                                  const id = `map-${subject.replace(/\\s+/g, '-').toLowerCase()}-${year}`;
+                                  const selectedYears = profileData.subject_year_mapping?.[subject] || [];
+                                  const checked = selectedYears.includes(year);
+                                  return (
+                                    <div key={year} className="flex items-center gap-2">
+                                      <Checkbox
+                                        id={id}
+                                        checked={checked}
+                                        onCheckedChange={(v) => toggleTutorYearForSubject(subject, year, !!v)}
+                                      />
+                                      <span className="text-sm text-muted-foreground">Year {year}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
 

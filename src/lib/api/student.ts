@@ -158,11 +158,15 @@ export const studentApi = {
     file?: File;
     text_submission?: string;
     link_submission?: string;
+    student_comment?: string | null;
   }, submissionId?: number): Promise<AssignmentSubmission> {
     const formData = new FormData();
     if (data.file) formData.append('file', data.file);
     if (data.text_submission) formData.append('text_submission', data.text_submission);
     if (data.link_submission) formData.append('link_submission', data.link_submission);
+    if (data.student_comment !== undefined && data.student_comment !== null) {
+      formData.append('student_comment', data.student_comment);
+    }
 
     // If submissionId is provided, update existing submission
     if (submissionId) {
@@ -319,6 +323,12 @@ export const studentApi = {
         total: data.length,
       },
     };
+  },
+
+  async updateQuestionStatus(id: number, status: 'closed'): Promise<any> {
+    const response = await apiClient.put<any>(`/student/questions/${id}/status`, { status });
+    if (response.data && 'data' in response.data) return response.data.data;
+    return response.data;
   },
 };
 

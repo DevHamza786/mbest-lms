@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BookOpen, Calendar, Clock, Users, ExternalLink, Loader2, Search, ChevronLeft, ChevronRight, CheckCircle2, XCircle } from "lucide-react";
 import { ViewMaterialsModal } from '@/components/modals/ViewMaterialsModal';
 import { ClassScheduleModal } from '@/components/modals/ClassScheduleModal';
+import { StudentClassesCalendar } from '@/components/student/StudentClassesCalendar';
 import { useToast } from '@/hooks/use-toast';
 import { studentApi } from '@/lib/api';
 
@@ -17,6 +18,8 @@ const StudentClasses = () => {
   const [allClasses, setAllClasses] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [subjectFilter, setSubjectFilter] = useState<string>('all');
+  const [levelFilter, setLevelFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -106,6 +109,16 @@ const StudentClasses = () => {
       filtered = filtered.filter((classItem) => classItem.status === statusFilter);
     }
 
+    // Apply subject filter
+    if (subjectFilter !== 'all') {
+      filtered = filtered.filter((classItem) => (classItem.category || '') === subjectFilter);
+    }
+
+    // Apply level filter
+    if (levelFilter !== 'all') {
+      filtered = filtered.filter((classItem) => (classItem.level || '') === levelFilter);
+    }
+
     // Calculate pagination
     const total = filtered.length;
     setTotalPages(Math.ceil(total / itemsPerPage));
@@ -113,12 +126,20 @@ const StudentClasses = () => {
     const endIndex = startIndex + itemsPerPage;
     setEnrolledClasses(filtered.slice(startIndex, endIndex));
     setTotalCount(total);
-  }, [allClasses, searchQuery, statusFilter, currentPage]);
+  }, [allClasses, searchQuery, statusFilter, subjectFilter, levelFilter, currentPage]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, subjectFilter, levelFilter]);
+
+  const subjectOptions = Array.from(
+    new Set(allClasses.map((c) => c.category).filter((v) => Boolean(v)))
+  ).sort((a, b) => String(a).localeCompare(String(b)));
+
+  const levelOptions = Array.from(
+    new Set(allClasses.map((c) => c.level).filter((v) => Boolean(v)))
+  ).sort((a, b) => String(a).localeCompare(String(b)));
   
   const handleViewMaterials = (classItem: any) => {
     setMaterialsModal({ 
@@ -138,7 +159,7 @@ const StudentClasses = () => {
   };
 
   const formatSchedule = (schedules: any[]) => {
-    if (!schedules || schedules.length === 0) return 'Not scheduled';
+    if (!schedules || schedules.length === 0) return null;
     const days = schedules.map(s => s.day_of_week).join(', ');
     const firstSchedule = schedules[0];
     const time = `${firstSchedule.start_time} - ${firstSchedule.end_time}`;
@@ -225,8 +246,11 @@ const StudentClasses = () => {
         </Card>
       </div>
 
+      {/* Calendar */}
+      <StudentClassesCalendar classes={allClasses} />
+
       {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -245,6 +269,34 @@ const StudentClasses = () => {
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Filter by subject" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Subjects</SelectItem>
+            {subjectOptions.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={levelFilter} onValueChange={setLevelFilter}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Filter by level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Levels</SelectItem>
+            {levelOptions.map((l) => (
+              <SelectItem key={l} value={l}>
+                {l}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -294,7 +346,7 @@ const StudentClasses = () => {
                         <span className="ml-1">{tutorName}</span>
                       </div>
                       
-                      {schedule.days !== 'Not scheduled' && (
+                      {schedule && (
                         <>
                           <div className="flex items-center text-sm">
                             <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />

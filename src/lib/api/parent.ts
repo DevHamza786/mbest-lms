@@ -488,6 +488,25 @@ export interface Package {
     id: number;
     name: string;
     code: string;
+    category?: string; // subject
+    level?: string; // year level
+    duration?: string;
+    description?: string;
+    tutor?: {
+      user?: {
+        id?: number;
+        name?: string;
+        email?: string;
+      };
+    };
+    schedules?: Array<{
+      id?: number;
+      day_of_week?: string;
+      start_time?: string;
+      end_time?: string;
+      room?: string;
+      meeting_link?: string;
+    }>;
   }>;
 }
 

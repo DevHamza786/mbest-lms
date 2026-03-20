@@ -237,7 +237,7 @@ export default function AdminPayments() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Parent</TableHead>
-                    <TableHead>Package</TableHead>
+                    <TableHead>Subscription plan</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Submitted</TableHead>
@@ -370,7 +370,7 @@ export default function AdminPayments() {
                   <p className="font-medium mt-1">{selectedPayment.parent?.email || 'N/A'}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Package</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">Subscription plan</Label>
                   <p className="font-medium mt-1">{selectedPayment.package?.name || 'N/A'}</p>
                   {selectedPayment.package?.description && (
                     <p className="text-sm text-muted-foreground mt-1">{selectedPayment.package.description}</p>
@@ -478,10 +478,10 @@ export default function AdminPayments() {
                 </div>
               )}
 
-              {/* Package Details */}
+              {/* Subscription plan Details */}
               {selectedPayment.package && (
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Package Details</Label>
+                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Subscription plan Details</Label>
                   <div className="mt-2 p-4 bg-muted rounded-lg border space-y-2">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <p><strong>Student Limit:</strong> {selectedPayment.package.student_limit || 'Unlimited'}</p>
@@ -560,7 +560,7 @@ export default function AdminPayments() {
             {selectedPayment && (
               <div className="bg-muted p-4 rounded">
                 <p><strong>Parent:</strong> {selectedPayment.parent?.name}</p>
-                <p><strong>Package:</strong> {selectedPayment.package?.name}</p>
+                <p><strong>Subscription plan:</strong> {selectedPayment.package?.name}</p>
                 <p><strong>Amount:</strong> ${formatAmount(selectedPayment.amount)}</p>
               </div>
             )}
@@ -600,7 +600,7 @@ export default function AdminPayments() {
             {selectedPayment && (
               <div className="bg-muted p-4 rounded">
                 <p><strong>Parent:</strong> {selectedPayment.parent?.name}</p>
-                <p><strong>Package:</strong> {selectedPayment.package?.name}</p>
+                <p><strong>Subscription plan:</strong> {selectedPayment.package?.name}</p>
                 <p><strong>Amount:</strong> ${formatAmount(selectedPayment.amount)}</p>
               </div>
             )}

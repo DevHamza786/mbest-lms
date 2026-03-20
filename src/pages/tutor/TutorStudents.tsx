@@ -395,7 +395,7 @@ export default function TutorStudents() {
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <div>{student.name}</div>
+                                <div>{student.name}{student.grade ? ` – ${student.grade}` : ''}</div>
                                 <div className="text-xs text-muted-foreground">{student.enrollmentId}</div>
                               </div>
                             </div>

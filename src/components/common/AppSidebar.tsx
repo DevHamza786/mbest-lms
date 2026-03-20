@@ -213,7 +213,7 @@ export function AppSidebar() {
                   </div>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/profile/settings')}>
+                <DropdownMenuItem onClick={() => navigate(session.role === 'parent' ? '/parent/profile' : '/profile/settings')}>
                   <User className="mr-2 h-4 w-4" />
                   Profile
                 </DropdownMenuItem>

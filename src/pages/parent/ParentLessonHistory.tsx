@@ -17,6 +17,7 @@ export default function ParentLessonHistory() {
   const activeChild = getActiveChild();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('all');
+  const [selectedYearLevel, setSelectedYearLevel] = useState('all');
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [lessonHistory, setLessonHistory] = useState<Session[]>([]);
@@ -46,12 +47,25 @@ export default function ParentLessonHistory() {
           studentNames: [activeChild?.name || ''],
           subject: s.subject,
           yearLevel: s.year_level || '',
-          location: s.location,
-          sessionType: s.session_type,
-          status: s.status,
+          location: (s.location === 'online' || s.location === 'home' || s.location === 'centre') ? s.location : 'online',
+          sessionType: s.session_type === '1:1' || s.session_type === 'group' ? s.session_type : '1:1',
+          status:
+            s.status === 'planned' ||
+            s.status === 'completed' ||
+            s.status === 'cancelled' ||
+            s.status === 'no-show' ||
+            s.status === 'rescheduled'
+              ? s.status
+              : 'planned',
           lessonNote: s.lesson_note,
           topicsTaught: s.topics_taught,
           homeworkResources: s.homework_resources,
+          lessonMaterials:
+            (s as any).sessionFiles?.map((f: any) => ({
+              id: String(f.id),
+              fileName: f.file_name,
+              fileUrl: f.file_url,
+            })) || [],
           studentNotes: s.student_notes?.map(note => ({
             studentId: String(note.student_id),
             studentName: activeChild?.name || '',
@@ -79,6 +93,9 @@ export default function ParentLessonHistory() {
   }, [activeChildId, activeChild?.name]);
 
   const allSubjects = Array.from(new Set(lessonHistory.map(s => s.subject))).sort();
+  const allYearLevels = Array.from(
+    new Set(lessonHistory.map(s => s.yearLevel).filter((v) => Boolean(v && String(v).trim())))
+  ).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
 
   const filteredHistory = lessonHistory.filter(session => {
     const matchesSearch = 
@@ -87,8 +104,9 @@ export default function ParentLessonHistory() {
       session.topicsTaught?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesSubject = selectedSubject === 'all' || session.subject === selectedSubject;
+    const matchesYearLevel = selectedYearLevel === 'all' || session.yearLevel === selectedYearLevel;
 
-    return matchesSearch && matchesSubject;
+    return matchesSearch && matchesSubject && matchesYearLevel;
   });
 
   const handleViewDetails = (session: Session) => {
@@ -153,6 +171,19 @@ export default function ParentLessonHistory() {
             <SelectItem value="all">All Subjects</SelectItem>
             {allSubjects.map(subject => (
               <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={selectedYearLevel} onValueChange={setSelectedYearLevel}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All Year Levels" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Year Levels</SelectItem>
+            {allYearLevels.map((year) => (
+              <SelectItem key={year} value={year}>
+                Year {year}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -301,6 +332,26 @@ export default function ParentLessonHistory() {
                     <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
                       {selectedSession.homeworkResources}
                     </p>
+                  </div>
+                )}
+
+                {selectedSession.lessonMaterials && selectedSession.lessonMaterials.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">Lesson Materials</h3>
+                    <div className="space-y-2">
+                      {selectedSession.lessonMaterials.map((m) => (
+                        <a
+                          key={m.id}
+                          href={m.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline flex items-center gap-2"
+                        >
+                          <FileText className="h-4 w-4" />
+                          {m.fileName || 'Download file'}
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
 

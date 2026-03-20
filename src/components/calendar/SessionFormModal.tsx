@@ -18,27 +18,23 @@ interface SessionFormModalProps {
   allSessions: Session[];
   onSave: (sessionData: SessionFormData) => void;
   mode: 'create' | 'edit';
+  filterOptions?: {
+    teachers: Array<{ id: string; name: string }>;
+    students: Array<{ id: string; name: string }>;
+    subjects: string[];
+    locations: string[];
+    session_types: string[];
+    statuses: string[];
+  } | null;
 }
 
-// Mock data - replace with actual data
-const mockTeachers = [
-  { id: 'tutor-1', name: 'Dr. Michael Rodriguez' },
-  { id: 'tutor-2', name: 'Sarah Chen' },
-  { id: 'tutor-3', name: 'James Wilson' },
-];
-
-const mockStudents = [
-  { id: 'student-1', name: 'Emma Thompson' },
-  { id: 'student-2', name: 'Sampoorna Arora' },
-  { id: 'student-3', name: 'Xavier Dean' },
-  { id: 'student-4', name: 'Ethan Sutton' },
-  { id: 'student-5', name: 'Natasha Askary' },
-];
-
-const subjects = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Computer Science'];
+const defaultSubjects = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Computer Science'];
 const yearLevels = ['7', '8', '9', '10', '11', '12'];
 
-export function SessionFormModal({ open, onOpenChange, session, allSessions, onSave, mode }: SessionFormModalProps) {
+export function SessionFormModal({ open, onOpenChange, session, allSessions, onSave, mode, filterOptions }: SessionFormModalProps) {
+  const teachers = filterOptions?.teachers?.length ? filterOptions.teachers : [];
+  const students = filterOptions?.students?.length ? filterOptions.students : [];
+  const subjects = (filterOptions?.subjects?.length ? filterOptions.subjects : defaultSubjects).slice().sort();
   const { toast } = useToast();
   const [formData, setFormData] = useState<SessionFormData>({
     date: '',
@@ -47,10 +43,11 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
     teacherId: '',
     studentIds: [],
     subject: '',
-    yearLevel: '',
+    yearLevel: '', // kept for now but no longer required
     location: 'online',
     sessionType: '1:1',
     status: 'planned',
+    occurrences: 1,
   });
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
@@ -70,6 +67,7 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
         location: session.location,
         sessionType: session.sessionType,
         status: session.status,
+        occurrences: 1,
       });
       setSelectedStudents(session.studentIds);
     } else if (mode === 'create') {
@@ -85,6 +83,7 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
         location: 'online',
         sessionType: '1:1',
         status: 'planned',
+        occurrences: 1,
       });
       setSelectedStudents([]);
     }
@@ -112,8 +111,7 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
     if (!formData.endTime) errors.push('End time is required');
     if (!formData.teacherId) errors.push('Teacher is required');
     if (formData.studentIds.length === 0) errors.push('At least one student is required');
-    if (!formData.subject) errors.push('Subject is required');
-    if (!formData.yearLevel) errors.push('Year level is required');
+    if (!formData.subject) errors.push('Session title / subject is required');
 
     // Validate time range
     if (formData.startTime && formData.endTime) {
@@ -127,7 +125,7 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
     return errors.length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) {
       toast({
         title: 'Validation Error',
@@ -146,12 +144,20 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
       return;
     }
 
-    onSave(formData);
-    onOpenChange(false);
-    toast({
-      title: mode === 'create' ? 'Session Created' : 'Session Updated',
-      description: `Session has been ${mode === 'create' ? 'scheduled' : 'updated'} successfully.`,
-    });
+    try {
+      await onSave(formData);
+      onOpenChange(false);
+      toast({
+        title: mode === 'create' ? 'Session Created' : 'Session Updated',
+        description: `Session has been ${mode === 'create' ? 'scheduled' : 'updated'} successfully.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err?.message || 'Failed to save session',
+        variant: 'destructive',
+      });
+    }
   };
 
   const toggleStudent = (studentId: string) => {
@@ -242,9 +248,12 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
                 <SelectValue placeholder="Select teacher" />
               </SelectTrigger>
               <SelectContent>
-                {mockTeachers.map(teacher => (
+                {teachers.map(teacher => (
                   <SelectItem key={teacher.id} value={teacher.id}>{teacher.name}</SelectItem>
                 ))}
+                {teachers.length === 0 && (
+                  <SelectItem value="_none" disabled>No teachers found</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -253,24 +262,27 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
           <div>
             <Label>Students * (Select one or more)</Label>
             <div className="flex flex-wrap gap-2 mt-2">
-              {mockStudents.map(student => (
+              {students.map(student => (
                 <Badge
                   key={student.id}
                   variant={selectedStudents.includes(student.id) ? 'default' : 'outline'}
                   className="cursor-pointer"
                   onClick={() => toggleStudent(student.id)}
                 >
-                  {student.name}
+                  {student.name}{student.grade ? ` – ${student.grade}` : ''}
                   {selectedStudents.includes(student.id) && <CheckCircle2 className="ml-1 h-3 w-3" />}
                 </Badge>
               ))}
+              {students.length === 0 && (
+                <p className="text-sm text-muted-foreground">No students found. Add students first.</p>
+              )}
             </div>
           </div>
 
-          {/* Subject and Year Level */}
+          {/* Session Title / Subject */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="subject">Subject *</Label>
+              <Label htmlFor="subject">Session Title / Subject *</Label>
               <Select value={formData.subject} onValueChange={(value) => setFormData({ ...formData, subject: value })}>
                 <SelectTrigger id="subject">
                   <SelectValue placeholder="Select subject" />
@@ -282,23 +294,11 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="yearLevel">Year Level *</Label>
-              <Select value={formData.yearLevel} onValueChange={(value) => setFormData({ ...formData, yearLevel: value })}>
-                <SelectTrigger id="yearLevel">
-                  <SelectValue placeholder="Select year level" />
-                </SelectTrigger>
-                <SelectContent>
-                  {yearLevels.map(level => (
-                    <SelectItem key={level} value={level}>Year {level}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Year level now inherited from class, so we omit it here */}
           </div>
 
           {/* Location and Type */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="location">Location *</Label>
               <Select value={formData.location} onValueChange={(value: SessionLocation) => setFormData({ ...formData, location: value })}>
@@ -323,6 +323,19 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
                   <SelectItem value="group">Group</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label htmlFor="occurrences">Number of Days / Occurrences</Label>
+              <Input
+                id="occurrences"
+                type="number"
+                min={1}
+                max={30}
+                value={formData.occurrences ?? 1}
+                onChange={(e) =>
+                  setFormData({ ...formData, occurrences: Math.max(1, parseInt(e.target.value || '1', 10)) })
+                }
+              />
             </div>
           </div>
 

@@ -55,6 +55,14 @@ export default function AdminBilling() {
   const [parentPayments, setParentPayments] = useState<AdminInvoice[]>([]);
   const [parentPaymentsLoading, setParentPaymentsLoading] = useState(false);
 
+  // Package stats (active packages, students per package, revenue)
+  const [packageStats, setPackageStats] = useState<{
+    packages: Array<{ id: number; name: string; price: string | number; active_students: number; revenue: number }>;
+    total_revenue_from_packages: number;
+    total_active_students: number;
+  }>({ packages: [], total_revenue_from_packages: 0, total_active_students: 0 });
+  const [packageStatsLoading, setPackageStatsLoading] = useState(false);
+
   // Fetch invoices
   const fetchInvoices = async () => {
     try {
@@ -154,11 +162,24 @@ export default function AdminBilling() {
     }
   };
 
+  const fetchPackageStats = async () => {
+    try {
+      setPackageStatsLoading(true);
+      const data = await adminApi.getPackageStats();
+      setPackageStats(data);
+    } catch (e) {
+      console.error('Error fetching package stats:', e);
+    } finally {
+      setPackageStatsLoading(false);
+    }
+  };
+
   // Initial load
   useEffect(() => {
     fetchInvoices();
     fetchStats();
     fetchParentPayments();
+    fetchPackageStats();
   }, []);
 
   // Refetch when filters change
@@ -337,36 +358,6 @@ export default function AdminBilling() {
     });
   };
 
-  const plans = [
-    {
-      id: 'basic',
-      name: 'Basic Plan',
-      price: 299,
-      duration: 'per month',
-      features: ['Up to 3 courses', 'Basic support', 'Student dashboard'],
-      students: 156,
-      revenue: 46644
-    },
-    {
-      id: 'standard',
-      name: 'Standard Plan',
-      price: 599,
-      duration: 'per month',
-      features: ['Up to 8 courses', 'Priority support', 'Advanced analytics', 'Parent dashboard'],
-      students: 89,
-      revenue: 53311
-    },
-    {
-      id: 'premium',
-      name: 'Premium Plan',
-      price: 999,
-      duration: 'per month',
-      features: ['Unlimited courses', '24/7 support', 'Custom reports', 'API access'],
-      students: 45,
-      revenue: 44955
-    }
-  ];
-
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -518,6 +509,7 @@ export default function AdminBilling() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Invoice ID</TableHead>
+                        <TableHead>Created</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Student/Tutor</TableHead>
                         <TableHead>Parent</TableHead>
@@ -530,7 +522,7 @@ export default function AdminBilling() {
                     <TableBody>
                       {filteredInvoices.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                             No invoices found
                           </TableCell>
                         </TableRow>
@@ -538,6 +530,9 @@ export default function AdminBilling() {
                         filteredInvoices.map((invoice) => (
                           <TableRow key={invoice.id}>
                             <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {invoice.created_at ? new Date(invoice.created_at).toLocaleDateString() : '–'}
+                            </TableCell>
                             <TableCell>
                               <Badge variant={invoice.tutor_id ? 'outline' : 'secondary'}>
                                 {invoice.tutor_id ? 'Tutor' : 'Student'}
@@ -681,6 +676,7 @@ export default function AdminBilling() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Invoice ID</TableHead>
+                        <TableHead>Created</TableHead>
                         <TableHead>Parent Name</TableHead>
                         <TableHead>Student Name</TableHead>
                         <TableHead>Amount</TableHead>
@@ -693,7 +689,7 @@ export default function AdminBilling() {
                     <TableBody>
                       {parentPayments.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                             No parent payments found
                           </TableCell>
                         </TableRow>
@@ -701,6 +697,9 @@ export default function AdminBilling() {
                         parentPayments.map((payment) => (
                           <TableRow key={payment.id}>
                             <TableCell className="font-medium">{payment.invoice_number}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {payment.created_at ? new Date(payment.created_at).toLocaleDateString() : '–'}
+                            </TableCell>
                             <TableCell>{payment.parent?.name || '-'}</TableCell>
                             <TableCell>{payment.student?.user?.name || '-'}</TableCell>
                             <TableCell className="font-semibold">
@@ -751,76 +750,92 @@ export default function AdminBilling() {
         </TabsContent>
 
         <TabsContent value="plans" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-3">
-            {plans.map((plan) => (
-              <Card key={plan.id} className="relative">
+          {packageStatsLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">Total Revenue (Subscription plans)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">${packageStats.total_revenue_from_packages.toLocaleString()}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">Total Active Students (Subscription plans)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{packageStats.total_active_students}</div>
+                  </CardContent>
+                </Card>
+              </div>
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-xl">{plan.name}</CardTitle>
-                  <CardDescription>
-                    <span className="text-3xl font-bold text-foreground">
-                      ${plan.price}
-                    </span>
-                    <span className="text-muted-foreground">/{plan.duration}</span>
-                  </CardDescription>
+                  <CardTitle>Active Subscription plans</CardTitle>
+                  <CardDescription>Active plans with student count and revenue</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    {plan.features.map((feature, index) => (
-                      <div key={index} className="flex items-center text-sm">
-                        <span className="mr-2 h-1 w-1 rounded-full bg-primary"></span>
-                        {feature}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="pt-4 border-t space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Active Students:</span>
-                      <span className="font-medium">{plan.students}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Monthly Revenue:</span>
-                      <span className="font-medium">${plan.revenue.toLocaleString()}</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-4">
-                    <Button variant="outline" className="w-full">
-                      Manage Plan
-                    </Button>
-                  </div>
+                <CardContent>
+                  {packageStats.packages.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">No active subscription plans</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Subscription plan</TableHead>
+                          <TableHead>Price</TableHead>
+                          <TableHead>Active Students</TableHead>
+                          <TableHead>Revenue</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {packageStats.packages.map((pkg) => (
+                          <TableRow key={pkg.id}>
+                            <TableCell className="font-medium">{pkg.name}</TableCell>
+                            <TableCell>${typeof pkg.price === 'string' ? parseFloat(pkg.price).toFixed(2) : pkg.price}</TableCell>
+                            <TableCell>{pkg.active_students}</TableCell>
+                            <TableCell>${pkg.revenue.toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </CardContent>
               </Card>
-            ))}
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Plan Performance</CardTitle>
-              <CardDescription>
-                Revenue distribution across subscription plans
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {plans.map((plan) => {
-                  const percentage = (plan.revenue / plans.reduce((sum, p) => sum + p.revenue, 0)) * 100;
-                  return (
-                    <div key={plan.id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-primary"></div>
-                        <span className="font-medium">{plan.name}</span>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">${plan.revenue.toLocaleString()}</p>
-                        <p className="text-sm text-muted-foreground">{percentage.toFixed(1)}%</p>
-                      </div>
+              {packageStats.packages.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Revenue by Subscription plan</CardTitle>
+                    <CardDescription>Revenue distribution across package plans</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {packageStats.packages.map((pkg) => {
+                        const total = packageStats.total_revenue_from_packages || 1;
+                        const percentage = (pkg.revenue / total) * 100;
+                        return (
+                          <div key={pkg.id} className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-3 h-3 rounded-full bg-primary"></div>
+                              <span className="font-medium">{pkg.name}</span>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium">${pkg.revenue.toLocaleString()}</p>
+                              <p className="text-sm text-muted-foreground">{percentage.toFixed(1)}%</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
         </TabsContent>
       </Tabs>
 

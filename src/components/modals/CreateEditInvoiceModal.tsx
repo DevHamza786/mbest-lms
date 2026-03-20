@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Plus, X, Edit } from 'lucide-react';
 import type { Invoice, InvoiceItem } from '@/lib/types/common';
+import { adminApi } from '@/lib/api/admin';
 
 interface CreateEditInvoiceModalProps {
   open: boolean;
@@ -81,6 +82,25 @@ export function CreateEditInvoiceModal({ open, onOpenChange, onSave, invoice, mo
     }
   }, [invoice, mode, open]);
 
+  // When tutor is selected in create mode, auto-fetch hourly rate from tutor profile
+  useEffect(() => {
+    if (mode !== 'create' || !formData.tutorId || !open) return;
+    const tid = parseInt(String(formData.tutorId), 10);
+    if (Number.isNaN(tid)) return;
+    adminApi.getTutor(tid).then((tutor) => {
+      const rate = tutor.hourly_rate != null ? Number(tutor.hourly_rate) : 0;
+      if (rate > 0 && formData.items?.length) {
+        const updatedItems = [...(formData.items || [])];
+        updatedItems[0] = { ...updatedItems[0], amount: rate, description: updatedItems[0].description || 'Hourly rate (from tutor profile)' };
+        const totalAmount = updatedItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+        setFormData((prev) => ({ ...prev, items: updatedItems, amount: totalAmount }));
+      }
+      if (tutor.user?.name && !formData.tutorName) {
+        setFormData((prev) => ({ ...prev, tutorName: tutor.user.name }));
+      }
+    }).catch(() => {});
+  }, [formData.tutorId, mode, open]);
+
   const updateItem = (index: number, field: keyof InvoiceItem, value: any) => {
     const updatedItems = [...(formData.items || [])];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
@@ -106,6 +126,34 @@ export function CreateEditInvoiceModal({ open, onOpenChange, onSave, invoice, mo
     }
   };
 
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
+
+  const buildInvoiceFromForm = (): Invoice => ({
+    id: formData.id || `inv-${Date.now()}`,
+    invoiceNumber: formData.invoiceNumber || '',
+    studentId: formData.studentId || '',
+    studentName: formData.studentName || '',
+    parentId: formData.parentId,
+    parentName: formData.parentName,
+    tutorId: formData.tutorId,
+    tutorName: formData.tutorName,
+    amount: formData.amount || 0,
+    currency: formData.currency || 'USD',
+    status: formData.status || 'pending',
+    dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : new Date().toISOString(),
+    paidDate: null,
+    issueDate: formData.issueDate ? new Date(formData.issueDate).toISOString() : new Date().toISOString(),
+    description: formData.description || '',
+    items: formData.items || [],
+    paymentMethod: formData.paymentMethod,
+    transactionId: formData.transactionId,
+    tutorAddress: formData.tutorAddress,
+    notes: formData.notes,
+    periodStart: formData.periodStart ? new Date(formData.periodStart).toISOString() : undefined,
+    periodEnd: formData.periodEnd ? new Date(formData.periodEnd).toISOString() : undefined,
+  });
+
   const handleSave = () => {
     if (!formData.items || formData.items.length === 0) {
       toast({
@@ -125,54 +173,94 @@ export function CreateEditInvoiceModal({ open, onOpenChange, onSave, invoice, mo
       return;
     }
 
-    const invoiceToSave: Invoice = {
-      id: formData.id || `inv-${Date.now()}`,
-      invoiceNumber: formData.invoiceNumber,
-      studentId: formData.studentId || '',
-      studentName: formData.studentName || '',
-      parentId: formData.parentId,
-      parentName: formData.parentName,
-      tutorId: formData.tutorId,
-      tutorName: formData.tutorName,
-      amount: formData.amount || 0,
-      currency: formData.currency || 'USD',
-      status: formData.status || 'pending',
-      dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : new Date().toISOString(),
-      paidDate: null,
-      issueDate: formData.issueDate ? new Date(formData.issueDate).toISOString() : new Date().toISOString(),
-      description: formData.description || '',
-      items: formData.items || [],
-      paymentMethod: formData.paymentMethod,
-      transactionId: formData.transactionId,
-      tutorAddress: formData.tutorAddress,
-      notes: formData.notes,
-      periodStart: formData.periodStart ? new Date(formData.periodStart).toISOString() : undefined,
-      periodEnd: formData.periodEnd ? new Date(formData.periodEnd).toISOString() : undefined,
-    };
+    const invoiceToSave = buildInvoiceFromForm();
+
+    if (mode === 'create') {
+      setPreviewInvoice(invoiceToSave);
+      setShowPreview(true);
+      return;
+    }
 
     onSave(invoiceToSave);
     toast({
-      title: mode === 'create' ? "Invoice Created" : "Invoice Updated",
-      description: `Invoice ${invoiceToSave.invoiceNumber} has been ${mode === 'create' ? 'created' : 'updated'} successfully.`,
+      title: "Invoice Updated",
+      description: `Invoice ${invoiceToSave.invoiceNumber} has been updated successfully.`,
     });
     onOpenChange(false);
   };
 
+  const handleConfirmCreate = () => {
+    if (!previewInvoice) return;
+    onSave(previewInvoice);
+    toast({
+      title: "Invoice Created",
+      description: `Invoice ${previewInvoice.invoiceNumber} has been created successfully.`,
+    });
+    setShowPreview(false);
+    setPreviewInvoice(null);
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(open) => { if (!open) setShowPreview(false); setPreviewInvoice(null); onOpenChange(open); }}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Edit className="h-5 w-5" />
-            {mode === 'create' ? 'Create Invoice' : 'Edit Invoice'}
+            {showPreview ? 'Preview Invoice' : mode === 'create' ? 'Create Invoice' : 'Edit Invoice'}
           </DialogTitle>
           <DialogDescription>
-            {mode === 'create' 
+            {showPreview 
+              ? 'Review details and tutor hourly rate below, then confirm to create.'
+              : mode === 'create' 
               ? 'Create a new invoice for a student or tutor.'
               : 'Edit invoice details and items.'}
           </DialogDescription>
         </DialogHeader>
 
+        {showPreview && previewInvoice ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+              <p className="text-sm font-medium">Invoice # {previewInvoice.invoiceNumber}</p>
+              <p className="text-sm text-muted-foreground">
+                Type: {previewInvoice.tutorId ? 'Tutor' : 'Student'}
+                {previewInvoice.tutorName && (
+                  <span> • {previewInvoice.tutorName}</span>
+                )}
+              </p>
+              {previewInvoice.tutorId && (
+                <p className="text-sm text-muted-foreground">
+                  Tutor hourly rate applied to first line item
+                </p>
+              )}
+              <div className="pt-2 border-t">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Line items</p>
+                {previewInvoice.items?.map((item, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span>{item.description || '—'}</span>
+                    <span>${(item.amount || 0).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between font-semibold pt-2">
+                <span>Total</span>
+                <span>${(previewInvoice.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Due: {previewInvoice.dueDate ? new Date(previewInvoice.dueDate).toLocaleDateString() : '—'}
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setShowPreview(false); setPreviewInvoice(null); }}>
+                Back to edit
+              </Button>
+              <Button onClick={handleConfirmCreate}>
+                Confirm & Create
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+        <>
         <div className="space-y-6">
           {/* Invoice Type Selection */}
           <div className="grid grid-cols-2 gap-4">
@@ -426,9 +514,11 @@ export function CreateEditInvoiceModal({ open, onOpenChange, onSave, invoice, mo
             Cancel
           </Button>
           <Button onClick={handleSave}>
-            {mode === 'create' ? 'Create Invoice' : 'Save Changes'}
+            {mode === 'create' ? 'Preview & Create' : 'Save Changes'}
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

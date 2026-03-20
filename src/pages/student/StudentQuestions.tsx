@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageSquare, CheckCircle, Clock, AlertCircle, Loader2, Search, FileText, Download } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { studentApi } from '@/lib/api';
+import { AskQuestionModal } from '@/components/modals/AskQuestionModal';
 
 const StudentQuestions = () => {
   const { toast } = useToast();
@@ -19,6 +20,7 @@ const StudentQuestions = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const assignmentId = location.state?.assignmentId;
+  const [askOpen, setAskOpen] = useState(false);
 
   useEffect(() => {
     loadQuestions();
@@ -52,6 +54,23 @@ const StudentQuestions = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCloseQuestion = async (questionId: number) => {
+    try {
+      await studentApi.updateQuestionStatus(questionId, 'closed');
+      toast({
+        title: 'Question Closed',
+        description: 'Your question has been moved to Closed.',
+      });
+      await loadQuestions();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to close question',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -99,9 +118,19 @@ const StudentQuestions = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">My Questions</h1>
-        <p className="text-muted-foreground">View and manage your questions to tutors</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold">My Questions</h1>
+          <p className="text-muted-foreground">View and manage your questions to tutors</p>
+        </div>
+
+        <Button
+          onClick={() => setAskOpen(true)}
+          variant="outline"
+          className="shrink-0"
+        >
+          Ask Question
+        </Button>
       </div>
 
       {/* Search and Filters */}
@@ -239,6 +268,18 @@ const StudentQuestions = () => {
                     <div className="text-xs text-muted-foreground">
                       Asked on: {new Date(question.created_at).toLocaleDateString()}
                     </div>
+
+                    {question.status !== 'closed' && (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleCloseQuestion(question.id)}
+                        >
+                          Close Question
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -246,6 +287,15 @@ const StudentQuestions = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      <AskQuestionModal
+        isOpen={askOpen}
+        onClose={() => setAskOpen(false)}
+        onSubmitted={() => {
+          void loadQuestions();
+        }}
+        defaultCategory="general"
+      />
     </div>
   );
 };

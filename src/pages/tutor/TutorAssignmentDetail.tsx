@@ -62,7 +62,12 @@ export default function TutorAssignmentDetail() {
   }, [id, navigate, toast]);
 
   const handleGradeSubmission = async () => {
-    if (!selectedSubmission || gradeData.grade < 0 || gradeData.grade > (assignment?.max_points || 100)) {
+    if (
+      !selectedSubmission ||
+      Number.isNaN(gradeData.grade) ||
+      gradeData.grade < 0 ||
+      gradeData.grade > (assignment?.max_points || 100)
+    ) {
       toast({
         title: 'Invalid Grade',
         description: 'Please enter a valid grade',
@@ -229,6 +234,26 @@ export default function TutorAssignmentDetail() {
               <div className="mt-1 text-sm whitespace-pre-line">{assignment.instructions.replace(/\\n/g, '\n')}</div>
             </div>
           )}
+
+          {Array.isArray(assignment.assignmentFiles) && assignment.assignmentFiles.length > 0 && (
+            <div>
+              <Label className="text-muted-foreground">Tutor Materials</Label>
+              <div className="mt-2 space-y-2">
+                {assignment.assignmentFiles.map((f: any) => (
+                  <a
+                    key={f.id}
+                    href={f.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline flex items-center gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    {f.file_name || 'Download file'}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -365,7 +390,11 @@ export default function TutorAssignmentDetail() {
                 min="0"
                 max={assignment.max_points}
                 value={gradeData.grade}
-                onChange={(e) => setGradeData(prev => ({ ...prev, grade: Number(e.target.value) }))}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const next = raw === '' ? 0 : Number(raw);
+                  setGradeData(prev => ({ ...prev, grade: next }));
+                }}
               />
             </div>
             <div className="space-y-2">

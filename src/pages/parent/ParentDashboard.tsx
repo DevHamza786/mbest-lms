@@ -10,6 +10,7 @@ import { parentApi } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { AddStudentModal } from '@/components/modals/AddStudentModal';
 import { Plus } from 'lucide-react';
+import { ParentClassesCalendar } from '@/components/parent/ParentClassesCalendar';
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
@@ -189,6 +190,7 @@ const ParentDashboard = () => {
           name: cls.name,
           tutor: cls.tutor?.user?.name || 'Unknown',
           schedule: (cls.schedules || []).map(s => `${s.day_of_week} ${s.start_time}-${s.end_time}`).join(', '),
+          scheduleData: cls.schedules,
           room: cls.schedules?.[0]?.room,
           meetingLink: cls.schedules?.[0]?.meeting_link,
           status: cls.status as any,
@@ -275,18 +277,36 @@ const ParentDashboard = () => {
     status: getGradeStatus(grade.grade)
   })) || [];
 
-  // Get today's classes - filter classes that have a schedule for today
-  const getTodayDayName = () => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[new Date().getDay()];
+  const normalizeDayOfWeekToIndex = (dayOfWeek: unknown): number | null => {
+    if (!dayOfWeek) return null;
+    const s = String(dayOfWeek).trim().toLowerCase();
+    if (!s) return null;
+
+    if (s.startsWith('sun')) return 0;
+    if (s.startsWith('mon')) return 1;
+    if (s.startsWith('tue')) return 2;
+    if (s.startsWith('wed')) return 3;
+    if (s.startsWith('thu')) return 4;
+    if (s.startsWith('fri')) return 5;
+    if (s.startsWith('sat')) return 6;
+
+    return null;
   };
 
-  const todaysClasses = classes?.filter(cls => {
-    if (cls.status !== 'active') return false;
-    // Check if class schedule includes today's day
-    const todayDay = getTodayDayName();
-    return cls.schedule.toLowerCase().includes(todayDay.toLowerCase());
-  }).slice(0, 2) || [];
+  const todayIdx = new Date().getDay();
+
+  // Get today's classes - based on schedule day_of_week (more robust than string matching)
+  const todaysClasses =
+    classes
+      ?.filter((cls) => {
+        if (cls.status !== 'active') return false;
+        const scheduleData = (cls as any).scheduleData as Array<any> | undefined;
+        if (!scheduleData || !Array.isArray(scheduleData)) return false;
+        return scheduleData.some(
+          (s) => normalizeDayOfWeekToIndex(s?.day_of_week) === todayIdx
+        );
+      })
+      .slice(0, 2) || [];
 
   if (isLoading && !activeChild) {
     return (
@@ -513,12 +533,26 @@ const ParentDashboard = () => {
                   <div className="space-y-2 flex-1">
                     <h4 className="font-semibold">{classItem.name}</h4>
                     <div className="space-y-1">
-                      {classItem.schedule.split(',').map((scheduleItem, idx) => (
-                        <div key={idx} className="flex items-center text-sm text-muted-foreground">
-                          <Clock className="mr-1 h-3 w-3 flex-shrink-0" />
-                          <span>{scheduleItem.trim()}</span>
-                        </div>
-                      ))}
+                      {(((classItem as any).scheduleData as Array<any> | undefined) || [])
+                        .filter(
+                          (s) =>
+                            normalizeDayOfWeekToIndex(s?.day_of_week) === todayIdx
+                        )
+                        .map((s, idx) => {
+                          const label =
+                            s?.start_time && s?.end_time
+                              ? `${s.start_time}-${s.end_time}`
+                              : s?.start_time || '';
+                          return (
+                            <div
+                              key={`${idx}-${label}`}
+                              className="flex items-center text-sm text-muted-foreground"
+                            >
+                              <Clock className="mr-1 h-3 w-3 flex-shrink-0" />
+                              <span>{label}</span>
+                            </div>
+                          );
+                        })}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       with {classItem.tutor}
@@ -583,6 +617,9 @@ const ParentDashboard = () => {
           </div>
         </CardContent>
       </Card>
+      <div className="mt-6">
+        <ParentClassesCalendar classes={classes || []} />
+      </div>
         </>
       )}
       <AddStudentModal

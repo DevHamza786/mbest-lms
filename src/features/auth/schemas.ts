@@ -8,7 +8,8 @@ export const loginSchema = z.object({
   email: z
     .string()
     .min(1, 'Email is required')
-    .email('Please enter a valid email address'),
+    .email('Please enter a valid email address')
+    .refine((v) => !v.toLowerCase().endsWith('.comm'), 'Email domain is invalid'),
   password: z
     .string()
     .min(1, 'Password is required')
@@ -29,7 +30,10 @@ export const signupSchema = z.object({
   email: z
     .string()
     .min(1, 'Email is required')
-    .email('Please enter a valid email address'),
+    .email('Please enter a valid email address')
+    // Best-effort client-side block for known invalid example domains.
+    // Backend uses `email:rfc,dns` for strict validation.
+    .refine((v) => !v.toLowerCase().endsWith('.comm'), 'Email domain is invalid'),
   password: z
     .string()
     .min(1, 'Password is required')
@@ -56,7 +60,8 @@ export const forgotPasswordSchema = z.object({
   email: z
     .string()
     .min(1, 'Email is required')
-    .email('Please enter a valid email address'),
+    .email('Please enter a valid email address')
+    .refine((v) => !v.toLowerCase().endsWith('.comm'), 'Email domain is invalid'),
 });
 
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;

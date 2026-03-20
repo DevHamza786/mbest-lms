@@ -296,7 +296,7 @@ export default function TutorAttendanceRecords() {
                 <SelectItem value="all">All Students</SelectItem>
                 {students.map(student => (
                   <SelectItem key={student.id} value={String(student.id)}>
-                    {student.user?.name || `Student ${student.id}`}
+                    {student.user?.name || `Student ${student.id}`}{student.grade ? ` – ${student.grade}` : ''}
                   </SelectItem>
                 ))}
               </SelectContent>

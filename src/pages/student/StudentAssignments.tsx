@@ -47,57 +47,57 @@ const StudentAssignments = () => {
     submission: null,
   });
 
-  useEffect(() => {
-    const loadAssignments = async () => {
-      try {
-        setIsLoading(true);
-        // Load all assignments (both pending and completed)
-        const allAssignments = await studentApi.getAssignments({ per_page: 100 });
-        
-        // Separate into pending (not submitted or submitted but not graded) and completed (graded)
-        const pending = allAssignments.filter(a => {
-          const submission = a.submissions?.[0];
-          // Pending if no submission or submission exists but not graded
-          return !submission || !submission.grade;
-        });
-        
-        const completed = allAssignments.filter(a => {
-          const submission = a.submissions?.[0];
-          // Completed if has submission with grade
-          return submission && submission.grade !== null && submission.grade !== undefined;
-        });
-        
-        // Sort pending assignments by due date (nearest first)
-        const sortedPending = [...pending].sort((a, b) => {
-          const dateA = new Date(a.due_date).getTime();
-          const dateB = new Date(b.due_date).getTime();
-          return dateA - dateB;
-        });
-        
-        // Sort completed assignments by submission date (newest first)
-        const sortedCompleted = [...completed].sort((a, b) => {
-          const subA = a.submissions?.[0]?.submitted_at;
-          const subB = b.submissions?.[0]?.submitted_at;
-          if (!subA) return 1;
-          if (!subB) return -1;
-          return new Date(subB).getTime() - new Date(subA).getTime();
-        });
-        
-        setAllPendingAssignments(sortedPending);
-        setAllCompletedAssignments(sortedCompleted);
-      } catch (error) {
-        console.error('Failed to load assignments:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load assignments',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const refreshAssignments = async () => {
+    try {
+      setIsLoading(true);
+      // Load all assignments (both pending and completed)
+      const allAssignments = await studentApi.getAssignments({ per_page: 100 });
+      
+      // Pending if no submission OR submission exists but grade is NULL/undefined.
+      // Important: grade can be 0, and that should still count as "graded".
+      const pending = allAssignments.filter(a => {
+        const submission = a.submissions?.[0];
+        return !submission || submission.grade === null || submission.grade === undefined;
+      });
+      
+      // Completed if has submission with a non-null grade (including 0).
+      const completed = allAssignments.filter(a => {
+        const submission = a.submissions?.[0];
+        return submission && submission.grade !== null && submission.grade !== undefined;
+      });
+      
+      // Sort pending assignments by due date (nearest first)
+      const sortedPending = [...pending].sort((a, b) => {
+        const dateA = new Date(a.due_date).getTime();
+        const dateB = new Date(b.due_date).getTime();
+        return dateA - dateB;
+      });
+      
+      // Sort completed assignments by submission date (newest first)
+      const sortedCompleted = [...completed].sort((a, b) => {
+        const subA = a.submissions?.[0]?.submitted_at;
+        const subB = b.submissions?.[0]?.submitted_at;
+        if (!subA) return 1;
+        if (!subB) return -1;
+        return new Date(subB).getTime() - new Date(subA).getTime();
+      });
+      
+      setAllPendingAssignments(sortedPending);
+      setAllCompletedAssignments(sortedCompleted);
+    } catch (error) {
+      console.error('Failed to load assignments:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load assignments',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    loadAssignments();
+  useEffect(() => {
+    refreshAssignments();
   }, [toast]);
 
   // Get unique classes for filter
@@ -200,29 +200,7 @@ const StudentAssignments = () => {
         description: "The assignment has been marked as complete.",
       });
       // Reload assignments to update the list
-      const allAssignments = await studentApi.getAssignments({ per_page: 100 });
-      const pending = allAssignments.filter(a => {
-        const submission = a.submissions?.[0];
-        return !submission || !submission.grade;
-      });
-      const completed = allAssignments.filter(a => {
-        const submission = a.submissions?.[0];
-        return submission && submission.grade !== null && submission.grade !== undefined;
-      });
-      const sortedPending = [...pending].sort((a, b) => {
-        const dateA = new Date(a.due_date).getTime();
-        const dateB = new Date(b.due_date).getTime();
-        return dateA - dateB;
-      });
-      const sortedCompleted = [...completed].sort((a, b) => {
-        const subA = a.submissions?.[0]?.submitted_at;
-        const subB = b.submissions?.[0]?.submitted_at;
-        if (!subA) return 1;
-        if (!subB) return -1;
-        return new Date(subB).getTime() - new Date(subA).getTime();
-      });
-      setAllPendingAssignments(sortedPending);
-      setAllCompletedAssignments(sortedCompleted);
+      await refreshAssignments();
     } catch (error) {
       toast({
         title: "Error",
@@ -397,7 +375,10 @@ const StudentAssignments = () => {
                 const submission = assignment.submissions?.[0];
                 const isSubmitted = !!submission;
                 const isPastDue = daysUntilDue < 0;
-                const canEdit = isSubmitted && !isPastDue;
+                const isGraded =
+                  submission?.status === 'graded' ||
+                  (submission?.grade !== null && submission?.grade !== undefined);
+                const canEdit = isSubmitted && !isPastDue && !isGraded;
                 return (
                   <Card key={assignment.id} className="overflow-hidden">
                     <CardHeader>
@@ -594,11 +575,13 @@ const StudentAssignments = () => {
                         <Button variant="outline" size="sm" onClick={() => setViewSubmissionModal({ isOpen: true, assignment, submission })}>
                           View Submission
                         </Button>
-                        {!isPastDue && submission && (
+                        {!isPastDue && submission && submission?.status !== 'graded' && (
+                          submission?.grade === undefined || submission?.grade === null
+                        ) ? (
                           <Button size="sm" variant="secondary" onClick={() => setSubmitModal({ isOpen: true, assignment, submission })}>
                             Edit Submission
                           </Button>
-                        )}
+                        ) : null}
                         <Button variant="outline" size="sm" onClick={() => setDetailsModal({ isOpen: true, assignment })}>
                           View Details
                         </Button>
@@ -676,6 +659,10 @@ const StudentAssignments = () => {
         onClose={() => setSubmitModal({ isOpen: false, assignment: null, submission: null })}
         assignment={submitModal.assignment}
         submission={submitModal.submission}
+        onSubmitted={() => {
+          // Refresh immediately so the list updates without requiring manual refresh.
+          void refreshAssignments();
+        }}
       />
       <ViewSubmissionModal
         isOpen={viewSubmissionModal.isOpen}

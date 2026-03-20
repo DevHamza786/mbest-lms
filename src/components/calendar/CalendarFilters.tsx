@@ -84,7 +84,7 @@ export function CalendarFilters({ filters, onFilterChange, onClearFilters, filte
                 </SelectItem>
               ) : (
                 filterOptions?.students?.map(student => (
-                  <SelectItem key={student.id} value={student.id}>{student.name}</SelectItem>
+                  <SelectItem key={student.id} value={student.id}>{student.name}{student.grade ? ` – ${student.grade}` : ''}</SelectItem>
                 )) || null
               )}
             </SelectContent>

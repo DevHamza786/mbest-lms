@@ -14,17 +14,20 @@ interface SubmitAssignmentModalProps {
   onClose: () => void;
   assignment: any;
   submission?: any;
+  onSubmitted?: () => void;
 }
 
 export const SubmitAssignmentModal: React.FC<SubmitAssignmentModalProps> = ({
   isOpen,
   onClose,
   assignment,
-  submission
+  submission,
+  onSubmitted
 }) => {
   const { toast } = useToast();
   const [submissionText, setSubmissionText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const [studentComment, setStudentComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fullAssignment, setFullAssignment] = useState<any>(assignment);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,10 +39,12 @@ export const SubmitAssignmentModal: React.FC<SubmitAssignmentModalProps> = ({
       if (submission) {
         setSubmissionText(submission.text_submission || submission.link_submission || '');
         setFiles([]); // Files can't be edited, only re-uploaded
+        setStudentComment(submission.student_comment || '');
       } else {
         // Reset form when creating new submission
         setSubmissionText('');
         setFiles([]);
+        setStudentComment('');
       }
       
       // If assignment doesn't have tutor/class data, fetch full details
@@ -50,6 +55,7 @@ export const SubmitAssignmentModal: React.FC<SubmitAssignmentModalProps> = ({
       }
     } else {
       setFullAssignment(assignment);
+      setStudentComment('');
     }
   }, [isOpen, assignment, submission]);
 
@@ -128,6 +134,7 @@ export const SubmitAssignmentModal: React.FC<SubmitAssignmentModalProps> = ({
       
       if (submissionType === 'file' && files.length > 0) {
         submissionData.file = files[0]; // API might only accept one file
+        submissionData.student_comment = studentComment.trim();
       }
 
       if (submissionType === 'link') {
@@ -147,6 +154,8 @@ export const SubmitAssignmentModal: React.FC<SubmitAssignmentModalProps> = ({
 
       setSubmissionText('');
       setFiles([]);
+      setStudentComment('');
+      onSubmitted?.();
       onClose();
     } catch (error: any) {
       toast({
@@ -277,6 +286,17 @@ export const SubmitAssignmentModal: React.FC<SubmitAssignmentModalProps> = ({
                     ))}
                   </div>
                 )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="student-comment">Comment (optional)</Label>
+                  <Textarea
+                    id="student-comment"
+                    placeholder="Add a short note for your tutor about this submission..."
+                    value={studentComment}
+                    onChange={(e) => setStudentComment(e.target.value)}
+                    rows={4}
+                  />
+                </div>
               </div>
             )}
 

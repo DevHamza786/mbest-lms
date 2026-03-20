@@ -29,7 +29,7 @@ interface LessonEvent {
   time: string;
   duration: number;
   mode: 'online' | 'offline';
-  status: 'scheduled' | 'completed' | 'cancelled' | 'unavailable';
+  status: 'scheduled' | 'completed' | 'cancelled' | 'unavailable' | 'rescheduled';
   color: string;
   cancellationReason?: string;
   lessonNote?: string;
@@ -41,6 +41,13 @@ interface LessonEvent {
   subject?: string;
   wage?: number;
   invoiceGenerated?: boolean; // Track if invoice has been generated
+
+  // Tutor-provided materials (prior reading, etc.)
+  materials?: Array<{
+    id: string;
+    fileName?: string;
+    fileUrl?: string;
+  }>;
 }
 
 export default function TutorCalendar() {
@@ -60,6 +67,9 @@ export default function TutorCalendar() {
   const [editingLesson, setEditingLesson] = useState<LessonEvent | null>(null);
   const [cancellationReason, setCancellationReason] = useState('');
   const [unavailableReason, setUnavailableReason] = useState('');
+  const [proposedDate, setProposedDate] = useState('');
+  const [proposedStartTime, setProposedStartTime] = useState('');
+  const [proposedEndTime, setProposedEndTime] = useState('');
   const [generatedInvoices, setGeneratedInvoices] = useState<Record<string, any>>({});
   const [lessons, setLessons] = useState<Record<string, LessonEvent[]>>({});
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
@@ -75,6 +85,7 @@ export default function TutorCalendar() {
     location: 'online' as 'online' | 'home' | 'centre',
     yearLevel: '',
     classId: null as number | null,
+    materials: [] as File[],
   });
 
   const monthStart = startOfMonth(currentDate);
@@ -96,12 +107,21 @@ export default function TutorCalendar() {
     
     // Get student names
     const studentNames = session.students?.map((s: any) => s.user?.name || `Student ${s.id}`) || [];
+
+    // Tutor-provided materials
+    const materials =
+      session.sessionFiles?.map((f: any) => ({
+        id: String(f.id),
+        fileName: f.file_name,
+        fileUrl: f.file_url,
+      })) || [];
     
     // Map status
-    let status: 'scheduled' | 'completed' | 'cancelled' | 'unavailable' = 'scheduled';
+    let status: 'scheduled' | 'completed' | 'cancelled' | 'unavailable' | 'rescheduled' = 'scheduled';
     if (session.status === 'completed') status = 'completed';
     else if (session.status === 'cancelled') status = 'cancelled';
     else if (session.status === 'unavailable') status = 'unavailable';
+    else if (session.status === 'rescheduled') status = 'rescheduled';
     
     // Determine mode from location
     const mode: 'online' | 'offline' = session.location === 'online' ? 'online' : 'offline';
@@ -122,6 +142,8 @@ export default function TutorCalendar() {
       homeworkResources: session.homework_resources,
       tutorName: session?.name || 'Current Tutor',
       invoiceGenerated: session.ready_for_invoicing || false, // Check if invoice has been generated
+
+      materials,
     };
   };
 
@@ -274,10 +296,19 @@ export default function TutorCalendar() {
     }
 
     try {
-      // Update session status to unavailable via API
-      await tutorApi.updateSession(Number(selectedLesson.id), {
-        status: 'unavailable',
-      });
+      // If tutor proposed a new time, create a reschedule proposal.
+      if (proposedDate && proposedStartTime && proposedEndTime) {
+        await tutorApi.proposeReschedule(Number(selectedLesson.id), {
+          proposed_date: proposedDate,
+          proposed_start_time: proposedStartTime,
+          proposed_end_time: proposedEndTime,
+        });
+      } else {
+        // Otherwise just mark the session as unavailable.
+        await tutorApi.updateSession(Number(selectedLesson.id), {
+          status: 'unavailable',
+        });
+      }
 
       // Reload sessions
       const monthStart = startOfMonth(currentDate);
@@ -311,6 +342,9 @@ export default function TutorCalendar() {
     }
 
     setUnavailableReason('');
+    setProposedDate('');
+    setProposedStartTime('');
+    setProposedEndTime('');
     setIsUnavailableOpen(false);
     setSelectedLesson(null);
   };
@@ -686,6 +720,7 @@ export default function TutorCalendar() {
         session_type: newLesson.studentIds.length > 1 ? 'group' : '1:1',
         student_ids: newLesson.studentIds,
         class_id: newLesson.classId || undefined,
+        materials: newLesson.materials.length ? newLesson.materials : undefined,
       });
 
       // Reload sessions
@@ -710,7 +745,7 @@ export default function TutorCalendar() {
         title: "Lesson Added",
         description: `Lesson scheduled for ${newLesson.studentIds.length} student(s) successfully.`,
       });
-      setNewLesson({ studentIds: [], subject: '', date: '', startTime: '', endTime: '', duration: '1', location: 'online', yearLevel: '', classId: null });
+      setNewLesson({ studentIds: [], subject: '', date: '', startTime: '', endTime: '', duration: '1', location: 'online', yearLevel: '', classId: null, materials: [] });
       setIsAddLessonOpen(false);
     } catch (error) {
       console.error('Failed to create lesson:', error);
@@ -843,7 +878,7 @@ export default function TutorCalendar() {
                               onCheckedChange={() => toggleStudent(student.id)}
                             />
                             <Label htmlFor={`student-${student.id}`} className="cursor-pointer text-sm flex-1">
-                              {student.user?.name || `Student ${student.id}`}
+                              {student.user?.name || `Student ${student.id}`}{student.grade ? ` – ${student.grade}` : ''}
                             </Label>
                           </div>
                         ))}
@@ -860,7 +895,7 @@ export default function TutorCalendar() {
                                   className="cursor-pointer"
                                   onClick={() => toggleStudent(studentId)}
                                 >
-                                  {student?.user?.name || `Student ${studentId}`}
+                                  {student?.user?.name || `Student ${studentId}`}{student?.grade ? ` – ${student.grade}` : ''}
                                   <X className="ml-1 h-3 w-3" />
                                 </Badge>
                               );
@@ -924,6 +959,18 @@ export default function TutorCalendar() {
                   placeholder="e.g., Year 10, Year 11"
                   value={newLesson.yearLevel}
                   onChange={(e) => setNewLesson({ ...newLesson, yearLevel: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="materials">Lesson Materials (optional)</Label>
+                <Input
+                  id="materials"
+                  type="file"
+                  multiple
+                  onChange={(e) => {
+                    const files = e.target.files ? Array.from(e.target.files) : [];
+                    setNewLesson({ ...newLesson, materials: files });
+                  }}
                 />
               </div>
               </div>
@@ -1096,9 +1143,32 @@ export default function TutorCalendar() {
                                     <p className="text-xs text-secondary dark:text-secondary-light line-clamp-2 leading-relaxed">{lesson.lessonNote}</p>
                                   </div>
                                 )}
+
+                                {lesson.materials && lesson.materials.length > 0 && (
+                                  <div className="p-3 bg-secondary/10 dark:bg-secondary/20 rounded-lg border border-secondary/30 dark:border-secondary/40">
+                                    <p className="font-semibold text-xs text-secondary dark:text-secondary-light mb-1 flex items-center gap-2">
+                                      <FileText className="h-4 w-4" />
+                                      Lesson Materials
+                                    </p>
+                                    <div className="space-y-2">
+                                      {lesson.materials.map((m) => (
+                                        <a
+                                          key={m.id}
+                                          href={m.fileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs text-primary hover:underline flex items-center gap-2"
+                                        >
+                                          <Download className="h-3.5 w-3.5" />
+                                          {m.fileName || 'Download file'}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                               <div className="space-y-2 pt-3 border-t">
-                                {lesson.status === 'scheduled' && (
+                                {lesson.status === 'scheduled' || lesson.status === 'rescheduled' ? (
                                   <>
                                     <div className="flex flex-col gap-2.5">
                                       <Button
@@ -1141,7 +1211,7 @@ export default function TutorCalendar() {
                                       </div>
                                     </div>
                                   </>
-                                )}
+                                ) : null}
                                 {lesson.status === 'completed' && !lesson.invoiceGenerated && (
                                   <div className="pt-2 border-t">
                                     <Button
@@ -1292,7 +1362,7 @@ export default function TutorCalendar() {
                         <span className="font-medium">In-Person Session</span>
                       </div>
                     )}
-                    {lesson.status === 'scheduled' && (
+                    {lesson.status === 'scheduled' || lesson.status === 'rescheduled' ? (
                       <div className="flex flex-col gap-2.5 pt-3 border-t">
                         <Button
                           size="default"
@@ -1333,7 +1403,7 @@ export default function TutorCalendar() {
                           </Button>
                         </div>
                       </div>
-                    )}
+                    ) : null}
                     {lesson.status === 'completed' && !lesson.invoiceGenerated && (
                       <div className="pt-3 border-t">
                         <Button
@@ -1458,11 +1528,56 @@ export default function TutorCalendar() {
                 className="mt-2"
               />
             </div>
+
+            <div>
+              <Label htmlFor="propose-new-time">Propose New Time (optional)</Label>
+              <div className="grid grid-cols-3 gap-3 mt-2">
+                <div className="space-y-1">
+                  <Label htmlFor="proposedDate" className="text-xs text-muted-foreground">
+                    Date
+                  </Label>
+                  <Input
+                    id="proposedDate"
+                    type="date"
+                    value={proposedDate}
+                    onChange={(e) => setProposedDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="proposedStartTime" className="text-xs text-muted-foreground">
+                    Start
+                  </Label>
+                  <Input
+                    id="proposedStartTime"
+                    type="time"
+                    value={proposedStartTime}
+                    onChange={(e) => setProposedStartTime(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="proposedEndTime" className="text-xs text-muted-foreground">
+                    End
+                  </Label>
+                  <Input
+                    id="proposedEndTime"
+                    type="time"
+                    value={proposedEndTime}
+                    onChange={(e) => setProposedEndTime(e.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Leave these blank to only mark the lesson as unavailable.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setIsUnavailableOpen(false);
               setUnavailableReason('');
+              setProposedDate('');
+              setProposedStartTime('');
+              setProposedEndTime('');
               setSelectedLesson(null);
             }}>
               Cancel

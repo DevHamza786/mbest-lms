@@ -69,6 +69,7 @@ export default function AdminClasses() {
     tutor_id: '',
     start_date: '',
     end_date: '',
+    status: 'draft',
   });
   
   const [sessionForm, setSessionForm] = useState({
@@ -248,7 +249,7 @@ export default function AdminClasses() {
         tutor_id: tutorUser.tutor.id,
         start_date: classForm.start_date || undefined,
         end_date: classForm.end_date || undefined,
-        status: 'active',
+        status: classForm.status || 'draft',
       });
 
       toast({
@@ -485,7 +486,7 @@ export default function AdminClasses() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="className">Class Name *</Label>
                   <Input 
@@ -537,6 +538,22 @@ export default function AdminClasses() {
                       <SelectItem value="Beginner">Beginner</SelectItem>
                       <SelectItem value="Intermediate">Intermediate</SelectItem>
                       <SelectItem value="Advanced">Advanced</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="classStatus">Status</Label>
+                  <Select
+                    value={classForm.status || 'active'}
+                    onValueChange={(value) => setClassForm({ ...classForm, status: value })}
+                  >
+                    <SelectTrigger id="classStatus">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -736,7 +753,7 @@ export default function AdminClasses() {
                     )}
                     {cls.packages && cls.packages.length > 0 && (
                 <div className="mt-2 pt-2 border-t">
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Included in Packages:</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Included in Subscription plans:</p>
                   <div className="flex flex-wrap gap-1">
                     {cls.packages.map((pkg: any) => (
                       <Badge key={pkg.id} variant="outline" className="text-xs">
@@ -866,11 +883,11 @@ export default function AdminClasses() {
                                         <Users className="h-5 w-5 text-primary" />
                               </div>
                                       <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold truncate">{student.user?.name || 'Unknown'}</p>
+                                        <p className="text-sm font-semibold truncate">
+                                          {student.user?.name || 'Unknown'}
+                                          {student.grade ? ` – ${student.grade}` : ''}
+                                        </p>
                                         <p className="text-xs text-muted-foreground truncate">{student.user?.email || ''}</p>
-                                        {student.grade && (
-                                          <Badge variant="outline" className="mt-1 text-xs">{student.grade}</Badge>
-                                        )}
                                       </div>
                             </div>
                           ))}
@@ -1333,7 +1350,7 @@ export default function AdminClasses() {
                         htmlFor={`student-${student.id}`}
                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                       >
-                        {student.name}
+                        {student.name}{student.student?.grade ? ` – ${student.student.grade}` : ''}
                       </label>
                     </div>
                   ))}

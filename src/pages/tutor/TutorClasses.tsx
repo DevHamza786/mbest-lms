@@ -40,11 +40,13 @@ interface SessionDisplay {
 export default function TutorClasses() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState<string>('all');
+  const [yearLevelFilter, setYearLevelFilter] = useState<string>('all');
   
   // Reset pagination when search changes
   useEffect(() => {
     setSessionsPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, subjectFilter, yearLevelFilter]);
   const [isCreateSessionOpen, setIsCreateSessionOpen] = useState(false);
   const [isEditSessionOpen, setIsEditSessionOpen] = useState(false);
   const [isViewSummaryOpen, setIsViewSummaryOpen] = useState(false);
@@ -86,6 +88,7 @@ export default function TutorClasses() {
     session_type: 'group',
     year_level: '',
     student_ids: [] as number[],
+    class_id: null as number | null,
   });
 
   const [editSession, setEditSession] = useState({
@@ -531,11 +534,38 @@ export default function TutorClasses() {
     }
   };
 
-  const filteredSessions = sessions.filter(session =>
-    session.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    session.date.includes(searchTerm) ||
-    session.room.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const subjectOptions = Array.from(
+    new Set(
+      sessions
+        .map((s) => s.rawSession?.subject)
+        .filter((v): v is string => Boolean(v && v.trim()))
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  const yearLevelOptions = Array.from(
+    new Set(
+      sessions
+        .map((s) => s.rawSession?.year_level)
+        .filter((v): v is string => Boolean(v && String(v).trim()))
+    )
+  ).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+
+  const filteredSessions = sessions.filter((session) => {
+    const matchesSearch =
+      session.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      session.date.includes(searchTerm) ||
+      session.room.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesSubject =
+      subjectFilter === 'all' ||
+      (session.rawSession?.subject || session.title) === subjectFilter;
+
+    const matchesYearLevel =
+      yearLevelFilter === 'all' ||
+      String(session.rawSession?.year_level || '') === yearLevelFilter;
+
+    return matchesSearch && matchesSubject && matchesYearLevel;
+  });
 
   // Paginate filtered sessions
   const totalSessionsPages = Math.ceil(filteredSessions.length / sessionsPerPage);
@@ -577,6 +607,7 @@ export default function TutorClasses() {
               session_type: 'group',
               year_level: '',
               student_ids: [],
+              class_id: null,
             });
             setStudents([]);
             setSelectedClassId('');
@@ -727,6 +758,7 @@ export default function TutorClasses() {
                           className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
                         >
                           {student.user?.name || `Student ${student.id}`}
+                          {(student as any).grade ? ` – ${(student as any).grade}` : ''}
                           {student.user?.email && (
                             <span className="text-xs text-muted-foreground block font-normal">
                               {student.user.email}
@@ -795,14 +827,46 @@ export default function TutorClasses() {
         </TabsList>
 
         <TabsContent value="sessions" className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex-1 min-w-[220px]">
               <Input
                 placeholder="Search sessions..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm"
               />
+            </div>
+
+            <div className="min-w-[200px]">
+              <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All subjects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Subjects</SelectItem>
+                  {subjectOptions.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="min-w-[200px]">
+              <Select value={yearLevelFilter} onValueChange={setYearLevelFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All year levels" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Year Levels</SelectItem>
+                  {yearLevelOptions.map((y) => (
+                    <SelectItem key={y} value={y}>
+                      Year {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -1158,13 +1222,14 @@ export default function TutorClasses() {
 
       {/* View Summary Dialog */}
       <Dialog open={isViewSummaryOpen} onOpenChange={setIsViewSummaryOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Session Summary</DialogTitle>
             <DialogDescription>
               View complete session details, students, assignments, and feedback
             </DialogDescription>
           </DialogHeader>
+          <div className="flex-1 overflow-y-auto">
           {loadingAssignments && !selectedSession ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -1249,7 +1314,10 @@ export default function TutorClasses() {
                             {paginatedStudents.map((student) => (
                               <div key={student.id} className="flex items-center gap-2 p-2 border rounded">
                                 <Users className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm font-medium">{student.user?.name || `Student ${student.id}`}</span>
+                                <span className="text-sm font-medium">
+                                  {student.user?.name || `Student ${student.id}`}
+                                  {(student as any).grade ? ` – ${(student as any).grade}` : ''}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -1563,6 +1631,7 @@ export default function TutorClasses() {
               <p className="text-sm text-muted-foreground">No session data available</p>
             </div>
           )}
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsViewSummaryOpen(false)}>
               Close
@@ -1610,15 +1679,15 @@ export default function TutorClasses() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <Users className="h-4 w-4 text-muted-foreground" />
-                              <span className="font-medium">{student.user?.name || `Student ${student.id}`}</span>
+                              <span className="font-medium">
+                                {student.user?.name || `Student ${student.id}`}
+                                {(student as any).grade ? ` – ${(student as any).grade}` : ''}
+                              </span>
                             </div>
                             {student.user?.email && (
                               <p className="text-sm text-muted-foreground ml-6">{student.user.email}</p>
                             )}
                             <div className="mt-2 ml-6 space-y-1">
-                              {student.grade && (
-                                <p className="text-xs text-muted-foreground">Grade: {student.grade}</p>
-                              )}
                               {student.enrollment_id && (
                                 <p className="text-xs text-muted-foreground">Enrollment ID: {student.enrollment_id}</p>
                               )}

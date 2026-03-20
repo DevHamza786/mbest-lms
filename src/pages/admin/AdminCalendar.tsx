@@ -8,18 +8,46 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 import { Session, SessionFilter, SessionFormData } from '@/lib/types/session';
 import { SessionFormModal } from '@/components/calendar/SessionFormModal';
 import { SessionDetailSheet } from '@/components/calendar/SessionDetailSheet';
+import { SessionInvoicePreviewModal } from '@/components/modals/SessionInvoicePreviewModal';
 import { CalendarFilters } from '@/components/calendar/CalendarFilters';
 import { getSessionColor, formatTimeDisplay } from '@/lib/utils/sessionUtils';
 import { useToast } from '@/hooks/use-toast';
 import { adminApi, AdminSession } from '@/lib/api/admin';
 
-// Map AdminSession to Session type
-const mapAdminSessionToSession = (adminSession: AdminSession): Session => {
+// Map AdminSession to Session type (defensive for API response shape)
+const mapAdminSessionToSession = (adminSession: AdminSession | null | undefined): Session => {
+  if (!adminSession || typeof adminSession !== 'object') {
+    return {
+      id: '0',
+      date: new Date().toISOString().split('T')[0],
+      startTime: '09:00',
+      endTime: '10:00',
+      teacherId: '',
+      teacherName: 'Unknown',
+      studentIds: [],
+      studentNames: [],
+      subject: '',
+      yearLevel: '',
+      location: 'online',
+      sessionType: '1:1',
+      status: 'planned',
+      lessonNote: '',
+      topicsTaught: '',
+      homeworkResources: '',
+      studentNotes: [],
+      attendanceMarked: false,
+      readyForInvoicing: false,
+      createdAt: '',
+      updatedAt: '',
+    };
+  }
   // Normalize date format to YYYY-MM-DD
-  let sessionDate = adminSession.date;
-  if (sessionDate && sessionDate.includes('T')) {
-    // If date includes time, extract just the date part
-    sessionDate = sessionDate.split('T')[0];
+  let sessionDate = (adminSession as any).date;
+  if (sessionDate != null) {
+    const d = typeof sessionDate === 'string' ? sessionDate : (sessionDate.toISOString?.() ?? String(sessionDate));
+    sessionDate = d.includes('T') ? d.split('T')[0] : d;
+  } else {
+    sessionDate = new Date().toISOString().split('T')[0];
   }
   
   return {
@@ -70,6 +98,7 @@ export default function AdminCalendar() {
     statuses: string[];
   } | null>(null);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
+  const [sessionForInvoicePreview, setSessionForInvoicePreview] = useState<Session | null>(null);
 
   // Calculate date range based on view mode
   const getDateRange = () => {
@@ -237,20 +266,34 @@ export default function AdminCalendar() {
     setIsDetailOpen(true);
   };
 
-  const handleSaveSession = (formData: SessionFormData) => {
+  const handleSaveSession = async (formData: SessionFormData) => {
     if (formMode === 'create') {
-      const newSession: Session = {
-        id: `session-${Date.now()}`,
-        ...formData,
-        teacherName: 'Dr. Michael Rodriguez', // Mock - would fetch from teacherId
-        studentNames: ['Emma Thompson'], // Mock - would fetch from studentIds
-        lessonNote: '',
-        attendanceMarked: false,
-        readyForInvoicing: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setSessions([...sessions, newSession]);
+      const teacherId = formData.teacherId ? parseInt(formData.teacherId, 10) : undefined;
+      const studentIds = (formData.studentIds || []).map(id => parseInt(id, 10)).filter(Boolean);
+      const occurrences = formData.occurrences && formData.occurrences > 0 ? formData.occurrences : 1;
+
+      let currentDate = selectedDate || new Date(formData.date);
+
+      for (let i = 0; i < occurrences; i++) {
+        const created = await adminApi.createSession({
+          date: format(currentDate, 'yyyy-MM-dd'),
+          start_time: formData.startTime,
+          end_time: formData.endTime,
+          teacher_id: teacherId!,
+          subject: formData.subject,
+          year_level: formData.yearLevel || undefined,
+          location: formData.location,
+          session_type: formData.sessionType,
+          status: formData.status || 'scheduled',
+          student_ids: studentIds.length ? studentIds : undefined,
+        });
+        const mapped = mapAdminSessionToSession(created);
+        setSessions(prev => [...prev, mapped]);
+        // Move to next day
+        currentDate = addDays(currentDate, 1);
+      }
+
+      await fetchSessions();
     } else if (selectedSession) {
       setSessions(sessions.map(s =>
         s.id === selectedSession.id
@@ -258,6 +301,28 @@ export default function AdminCalendar() {
           : s
       ));
     }
+  };
+
+  const handleUpdateSession = async (formData: SessionFormData) => {
+    if (!selectedSession) return;
+    const teacherId = formData.teacherId ? parseInt(formData.teacherId, 10) : undefined;
+    const studentIds = (formData.studentIds || []).map(id => parseInt(id, 10)).filter(Boolean);
+    const updated = await adminApi.updateSession(parseInt(selectedSession.id), {
+      date: formData.date,
+      start_time: formData.startTime,
+      end_time: formData.endTime,
+      teacher_id: teacherId,
+      subject: formData.subject,
+      year_level: formData.yearLevel || undefined,
+      location: formData.location,
+      session_type: formData.sessionType,
+      status: formData.status,
+      student_ids: studentIds.length ? studentIds : undefined,
+    });
+    const mapped = mapAdminSessionToSession(updated);
+    setSessions(prev => prev.map(s => (s.id === selectedSession.id ? mapped : s)));
+    setSelectedSession(mapped);
+    await fetchSessions();
   };
 
   const handleMarkComplete = async (session: Session) => {
@@ -367,11 +432,15 @@ export default function AdminCalendar() {
     }
   };
 
-  const handleMarkReadyForInvoicing = async (session: Session) => {
+  const handleOpenInvoicePreview = (session: Session) => {
+    setSessionForInvoicePreview(session);
+  };
+
+  const handleConfirmInvoicePreview = async (session: Session) => {
     try {
       const updatedSession = await adminApi.markSessionReadyForInvoicing(parseInt(session.id));
       const mappedSession = mapAdminSessionToSession(updatedSession);
-      
+
       setSessions(sessions.map(s => s.id === session.id ? mappedSession : s));
       if (selectedSession?.id === session.id) {
         setSelectedSession(mappedSession);
@@ -381,6 +450,7 @@ export default function AdminCalendar() {
         title: 'Ready for Invoicing',
         description: 'Session marked ready for invoicing',
       });
+      setSessionForInvoicePreview(null);
       setIsDetailOpen(false);
     } catch (error) {
       console.error('Failed to mark ready for invoicing:', error);
@@ -659,6 +729,7 @@ export default function AdminCalendar() {
         allSessions={sessions}
         onSave={formMode === 'edit' ? handleUpdateSession : handleSaveSession}
         mode={formMode}
+        filterOptions={filterOptions}
       />
 
       <SessionDetailSheet
@@ -668,8 +739,15 @@ export default function AdminCalendar() {
         onEdit={handleEditSession}
         onAddLessonNote={handleAddLessonNote}
         onMarkComplete={handleMarkComplete}
-        onMarkReadyForInvoicing={handleMarkReadyForInvoicing}
+        onMarkReadyForInvoicing={handleOpenInvoicePreview}
         onSaveLessonNote={handleSaveLessonNote}
+      />
+
+      <SessionInvoicePreviewModal
+        session={sessionForInvoicePreview}
+        open={!!sessionForInvoicePreview}
+        onOpenChange={(open) => !open && setSessionForInvoicePreview(null)}
+        onConfirm={handleConfirmInvoicePreview}
       />
     </div>
   );

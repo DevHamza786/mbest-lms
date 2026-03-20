@@ -14,13 +14,13 @@ const REVERB_PORT = import.meta.env.VITE_REVERB_PORT || '8080';
 const REVERB_SCHEME = import.meta.env.VITE_REVERB_SCHEME || 'http';
 
 // Debug: Log environment variables
-console.log('🔧 Echo Environment Variables:', {
-  VITE_REVERB_APP_KEY: REVERB_APP_KEY.substring(0, 10) + '...',
-  VITE_REVERB_HOST: REVERB_HOST,
-  VITE_REVERB_PORT: REVERB_PORT,
-  VITE_REVERB_SCHEME: REVERB_SCHEME,
-  VITE_API_BASE_URL: API_BASE_URL,
-});
+// console.log('🔧 Echo Environment Variables:', {
+//   VITE_REVERB_APP_KEY: REVERB_APP_KEY.substring(0, 10) + '...',
+//   VITE_REVERB_HOST: REVERB_HOST,
+//   VITE_REVERB_PORT: REVERB_PORT,
+//   VITE_REVERB_SCHEME: REVERB_SCHEME,
+//   VITE_API_BASE_URL: API_BASE_URL,
+// });
 
 // Validate port is correct
 if (REVERB_PORT === '5173' || REVERB_PORT === 5173) {

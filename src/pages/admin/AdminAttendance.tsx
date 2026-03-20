@@ -986,7 +986,7 @@ export default function AdminAttendance() {
                             {students.map((student: any) => (
                               <TableRow key={student.id || student.user_id}>
                                 <TableCell className="font-medium">
-                                  {student.user?.name || 'Unknown'}
+                                  {student.user?.name || 'Unknown'}{student.grade ? ` – ${student.grade}` : ''}
                                 </TableCell>
                                 <TableCell className="text-sm text-muted-foreground">
                                   {student.user?.email || 'N/A'}

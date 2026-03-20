@@ -1,10 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { CheckCircle2, XCircle, Upload, Loader2, Users, BookOpen, GraduationCap, CreditCard, LogOut } from "lucide-react";
 import { parentApi, type Package, type SubscriptionInfo, type Payment } from '@/lib/api';
 import { useToast } from "@/hooks/use-toast";
@@ -22,21 +29,9 @@ const ParentSubscription = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Check if subscription is active and redirect to dashboard
-  useEffect(() => {
-    const checkAndRedirect = async () => {
-      try {
-        const sub = await parentApi.getMySubscription();
-        if (sub?.status === 'active' && sub.package) {
-          navigate('/parent', { replace: true });
-        }
-      } catch (err) {
-        // Ignore errors - let user stay on subscription page
-      }
-    };
-    checkAndRedirect();
-  }, [navigate]);
+  const [subjectFilter, setSubjectFilter] = useState<string>('all');
+  const [yearLevelFilter, setYearLevelFilter] = useState<string>('all');
+  const [tutorFilter, setTutorFilter] = useState<string>('all');
 
   useEffect(() => {
     loadData();
@@ -135,6 +130,48 @@ const ParentSubscription = () => {
     navigate('/auth/signin');
   };
 
+  const allPackageClasses = useMemo(() => {
+    return (packages || []).flatMap((pkg) => pkg.classes || []);
+  }, [packages]);
+
+  const subjectOptions = useMemo(() => {
+    return Array.from(
+      new Set(allPackageClasses.map((c) => c.category).filter(Boolean))
+    ).sort();
+  }, [allPackageClasses]);
+
+  const yearLevelOptions = useMemo(() => {
+    return Array.from(
+      new Set(allPackageClasses.map((c) => c.level).filter(Boolean))
+    ).sort();
+  }, [allPackageClasses]);
+
+  const tutorOptions = useMemo(() => {
+    return Array.from(
+      new Set(allPackageClasses.map((c) => c.tutor?.user?.name).filter(Boolean))
+    ).sort();
+  }, [allPackageClasses]);
+
+  const filteredPackages = useMemo(() => {
+    const sub = subjectFilter.toLowerCase();
+    const lvl = yearLevelFilter.toLowerCase();
+    const tut = tutorFilter.toLowerCase();
+
+    return (packages || []).filter((pkg) => {
+      const cls = pkg.classes || [];
+      if (cls.length === 0) return false;
+
+      const matchesSubject =
+        sub === 'all' || cls.some((c) => (c.category || '').toLowerCase() === sub);
+      const matchesLevel =
+        lvl === 'all' || cls.some((c) => (c.level || '').toLowerCase() === lvl);
+      const matchesTutor =
+        tut === 'all' || cls.some((c) => (c.tutor?.user?.name || '').toLowerCase() === tut);
+
+      return matchesSubject && matchesLevel && matchesTutor;
+    });
+  }, [packages, subjectFilter, yearLevelFilter, tutorFilter]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -146,79 +183,7 @@ const ParentSubscription = () => {
     );
   }
 
-  // If subscription is active, show status with redirect option
-  if (subscription?.status === 'active' && subscription.package) {
-    return (
-      <div className="min-h-screen bg-background">
-        {/* Simple Header */}
-        <header className="border-b bg-card">
-          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">MATHEMATICS BEYOND TUTORING</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">{session?.name}</span>
-              <Button variant="ghost" size="sm" onClick={handleLogout}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
-            </div>
-          </div>
-        </header>
-        
-        <div className="container mx-auto py-8 px-4">
-          <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-              Active Subscription
-            </CardTitle>
-            <CardDescription>Your subscription is active and you can access all features.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">{subscription.package.name}</h3>
-              <p className="text-muted-foreground mb-4">{subscription.package.description}</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    Students: {subscription.current_student_count} / {subscription.limits?.student_limit || 0}
-                  </span>
-                </div>
-                {subscription.limits?.classes && subscription.limits.classes.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">
-                      Available Classes: {subscription.limits.classes.length}
-                    </span>
-                  </div>
-                )}
-              </div>
-              {subscription.limits?.classes && subscription.limits.classes.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-sm font-medium mb-2">Included Classes:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {subscription.limits.classes.map((cls: any) => (
-                      <Badge key={cls.id} variant="outline">
-                        {cls.name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            {subscription.status === 'active' && (
-              <Button onClick={() => navigate('/parent')}>
-                Go to Dashboard
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-        </div>
-      </div>
-    );
-  }
+  // If subscription is active, parents can still upgrade by selecting a new package.
 
   // Show pending payment status
   if (subscription?.pending_payment) {
@@ -315,8 +280,17 @@ const ParentSubscription = () => {
       
       <div className="container mx-auto py-8 px-4">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">Select Subscription Package</h1>
-          <p className="text-muted-foreground">Choose a package that fits your needs</p>
+          <h1 className="text-3xl font-bold mb-2">Select Subscription plan</h1>
+          <p className="text-muted-foreground">Choose a plan that fits your needs</p>
+          {subscription?.status === 'active' && subscription.package && (
+            <div className="mt-4 p-4 rounded-lg border bg-muted/30">
+              <div className="text-sm font-medium">Current active plan</div>
+              <div className="text-lg font-semibold">{subscription.package.name}</div>
+              <div className="text-sm text-muted-foreground">
+                Students: {subscription.current_student_count} / {subscription.limits?.student_limit || 0}
+              </div>
+            </div>
+          )}
         </div>
 
       {error && (
@@ -324,6 +298,58 @@ const ParentSubscription = () => {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+
+      {/* Filters */}
+      <div className="mb-6 flex flex-wrap gap-4">
+        <div className="min-w-[220px]">
+          <Label>Subject</Label>
+          <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All subjects" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Subjects</SelectItem>
+              {subjectOptions.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="min-w-[220px]">
+          <Label>Year Level</Label>
+          <Select value={yearLevelFilter} onValueChange={setYearLevelFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All year levels" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Year Levels</SelectItem>
+              {yearLevelOptions.map((lvl) => (
+                <SelectItem key={lvl} value={lvl}>
+                  {lvl}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="min-w-[220px]">
+          <Label>Tutor</Label>
+          <Select value={tutorFilter} onValueChange={setTutorFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All tutors" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Tutors</SelectItem>
+              {tutorOptions.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {packages.length === 0 && !isLoading && (
         <Alert className="mb-6">
@@ -333,8 +359,14 @@ const ParentSubscription = () => {
         </Alert>
       )}
 
+      {packages.length > 0 && filteredPackages.length === 0 && !isLoading && (
+        <Alert className="mb-6">
+          <AlertDescription>No packages match your selected filters.</AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {packages.map((pkg) => (
+        {filteredPackages.map((pkg) => (
           <Card
             key={pkg.id}
             className={`cursor-pointer transition-all ${
@@ -360,17 +392,38 @@ const ParentSubscription = () => {
                     <BookOpen className="h-4 w-4 mt-0.5" />
                     <div className="flex-1">
                       <span className="block mb-1">{pkg.classes.length} Classes Included:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {pkg.classes.slice(0, 3).map((cls: any) => (
-                          <Badge key={cls.id} variant="outline" className="text-xs">
-                            {cls.name}
-                          </Badge>
-                        ))}
-                        {pkg.classes.length > 3 && (
+                      <div className="space-y-2">
+                        {pkg.classes.slice(0, 2).map((cls: any) => {
+                          const subject = cls.category || cls.name || 'Class';
+                          const yearText = cls.level ? ` – Year ${cls.level}` : '';
+                          const tutorName = cls.tutor?.user?.name || '—';
+                          const duration = cls.duration || '—';
+                          const desc = cls.description ? String(cls.description) : '';
+                          const shortDesc =
+                            desc.length > 100 ? `${desc.slice(0, 100)}...` : desc;
+
+                          return (
+                            <div key={cls.id} className="rounded-md border p-2">
+                              <div className="text-sm font-medium">
+                                {subject}
+                                {yearText}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Tutor: {tutorName} • Duration: {duration}
+                              </div>
+                              {shortDesc ? (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {shortDesc}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                        {pkg.classes.length > 2 ? (
                           <Badge variant="outline" className="text-xs">
-                            +{pkg.classes.length - 3} more
+                            +{pkg.classes.length - 2} more
                           </Badge>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   </li>

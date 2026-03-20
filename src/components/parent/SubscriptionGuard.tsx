@@ -40,37 +40,38 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
           return;
         }
         
+        const isOnSubscriptionPage = location.pathname.includes('/parent/subscription');
+
+        // Always allow access to the subscription page.
+        // This enables upgrading packages while already active and prevents redirect loops.
+        if (isOnSubscriptionPage) {
+          setHasAccess(true);
+          setIsChecking(false);
+          return;
+        }
+
         // If subscription is active
         if (subscription.status === 'active' && subscription.package) {
-          // If on subscription page and subscription is active, redirect to dashboard
-          if (location.pathname.includes('/parent/subscription')) {
-            navigate('/parent', { replace: true });
-            // Don't set hasAccess here - let the next render handle it
-            setIsChecking(false);
-            return;
-          }
-          // Allow access to all other routes
           setHasAccess(true);
         } else {
           // Subscription not active - redirect to subscription page
-          if (!location.pathname.includes('/parent/subscription')) {
-            navigate('/parent/subscription', { replace: true });
-            if (subscription.status === 'pending') {
-              toast({
-                title: 'Payment Pending',
-                description: 'Your payment is pending approval. You will be notified once approved.',
-                variant: 'default',
-              });
-            } else {
-              toast({
-                title: 'Subscription Required',
-                description: 'Please select and pay for a subscription package to access the parent portal.',
-                variant: 'default',
-              });
-            }
+          navigate('/parent/subscription', { replace: true });
+
+          if (subscription.status === 'pending') {
+            toast({
+              title: 'Payment Pending',
+              description: 'Your payment is pending approval. You will be notified once approved.',
+              variant: 'default',
+            });
+          } else {
+            toast({
+              title: 'Subscription Required',
+              description: 'Please select and pay for a subscription package to access the parent portal.',
+              variant: 'default',
+            });
           }
-          // Allow access only to subscription page
-          setHasAccess(location.pathname.includes('/parent/subscription'));
+
+          setHasAccess(false);
         }
       } catch (error: any) {
         console.error('Subscription check error:', error);

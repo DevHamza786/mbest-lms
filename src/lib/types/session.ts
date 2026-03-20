@@ -32,6 +32,11 @@ export interface Session {
   topicsTaught?: string; // Topics covered in the lesson
   homeworkResources?: string; // Homework resources provided
   studentNotes?: StudentNote[]; // Individual student notes (private to each parent)
+  lessonMaterials?: Array<{
+    id: string;
+    fileName?: string;
+    fileUrl?: string;
+  }>;
   attendanceMarked?: boolean;
   readyForInvoicing?: boolean;
   createdAt: string;
@@ -49,6 +54,7 @@ export interface SessionFormData {
   location: SessionLocation;
   sessionType: SessionType;
   status: SessionStatus;
+  occurrences?: number; // how many days/occurrences to create
 }
 
 export interface SessionFilter {

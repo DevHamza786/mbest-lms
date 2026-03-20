@@ -22,14 +22,16 @@ interface AskQuestionModalProps {
   assignment?: any;
   assignmentTitle?: string;
   className?: string;
+  defaultCategory?: string;
+  onSubmitted?: () => void;
 }
 
-export function AskQuestionModal({ isOpen, onClose, assignment, assignmentTitle, className }: AskQuestionModalProps) {
+export function AskQuestionModal({ isOpen, onClose, assignment, assignmentTitle, className, defaultCategory, onSubmitted }: AskQuestionModalProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     subject: '',
     priority: 'medium',
-    category: 'assignment',
+    category: defaultCategory ?? 'assignment',
     question: '',
     attachments: [] as File[],
   });
@@ -103,10 +105,11 @@ export function AskQuestionModal({ isOpen, onClose, assignment, assignmentTitle,
       setFormData({
         subject: '',
         priority: 'medium',
-        category: 'assignment',
+        category: defaultCategory ?? 'assignment',
         question: '',
         attachments: [],
       });
+      onSubmitted?.();
       
       onClose();
     } catch (error: any) {

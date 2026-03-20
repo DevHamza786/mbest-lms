@@ -476,10 +476,7 @@ const TutorDashboard = () => {
                                 htmlFor={`student-${student.id}`}
                                 className="text-sm font-normal cursor-pointer flex-1"
                               >
-                                {student.user?.name || `Student ${student.id}`}
-                                {student.grade && (
-                                  <span className="text-muted-foreground ml-2">({student.grade})</span>
-                                )}
+                                {student.user?.name || `Student ${student.id}`}{student.grade ? ` – ${student.grade}` : ''}
                               </Label>
                             </div>
                           ))}

@@ -25,6 +25,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { adminApi, type Package, type CreatePackageData, type AdminClass } from '@/lib/api/admin';
 
@@ -45,6 +52,9 @@ export default function AdminPackages() {
     allows_one_on_one: false,
     bank_details: '',
     is_active: true,
+    subject: '',
+    billing_type: 'recurring',
+    package_type: 'group',
   });
 
   // Debug: Log packages state changes
@@ -108,6 +118,9 @@ export default function AdminPackages() {
       allows_one_on_one: false,
       bank_details: '',
       is_active: true,
+      subject: '',
+      billing_type: 'recurring',
+      package_type: 'group',
     });
     setIsDialogOpen(true);
   };
@@ -123,6 +136,9 @@ export default function AdminPackages() {
       allows_one_on_one: pkg.allows_one_on_one,
       bank_details: pkg.bank_details || '',
       is_active: pkg.is_active,
+      subject: '',
+      billing_type: 'recurring',
+      package_type: 'group',
     });
     setIsDialogOpen(true);
   };
@@ -148,13 +164,13 @@ export default function AdminPackages() {
         await adminApi.updatePackage(selectedPackage.id, formData);
         toast({
           title: 'Success',
-          description: 'Package updated successfully',
+          description: 'Subscription plan updated successfully',
         });
       } else {
         await adminApi.createPackage(formData);
         toast({
           title: 'Success',
-          description: 'Package created successfully',
+          description: 'Subscription plan created successfully',
         });
       }
       setIsDialogOpen(false);
@@ -181,21 +197,21 @@ export default function AdminPackages() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Subscription Packages</h1>
-          <p className="text-muted-foreground">Manage subscription packages for parents</p>
+          <h1 className="text-3xl font-bold">Subscription plan</h1>
+          <p className="text-muted-foreground">Manage subscription plans for parents</p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          Create Package
+          Create Subscription plan
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All Packages</CardTitle>
+          <CardTitle>All Subscription plans</CardTitle>
           <CardDescription>
-            Manage subscription packages and their limits. Packages cannot be deleted to maintain subscription history. 
-            Use the "Active" toggle to deactivate packages instead.
+            Manage subscription plans and their limits. Plans cannot be deleted to maintain subscription history. 
+            Use the "Active" toggle to deactivate plans instead.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -215,7 +231,7 @@ export default function AdminPackages() {
               {!loading && packages.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    No packages found. Create your first package.
+                    No subscription plans found. Create your first plan.
                   </TableCell>
                 </TableRow>
               ) : packages.length > 0 ? (
@@ -277,14 +293,14 @@ export default function AdminPackages() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedPackage ? 'Edit Package' : 'Create Package'}</DialogTitle>
+            <DialogTitle>{selectedPackage ? 'Edit Subscription plan' : 'Create Subscription plan'}</DialogTitle>
             <DialogDescription>
-              {selectedPackage ? 'Update package details' : 'Create a new subscription package'}
+              {selectedPackage ? 'Update plan details' : 'Create a new subscription plan'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Package Name *</Label>
+              <Label htmlFor="name">Subscription plan Name *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -309,7 +325,7 @@ export default function AdminPackages() {
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Package description..."
+                placeholder="Plan description..."
                 rows={3}
               />
             </div>
@@ -323,6 +339,25 @@ export default function AdminPackages() {
               />
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Select
+                value={formData.subject || ''}
+                onValueChange={(value) => setFormData({ ...formData, subject: value })}
+              >
+                <SelectTrigger id="subject">
+                  <SelectValue placeholder="Filter classes by subject/category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Subjects</SelectItem>
+                  {Array.from(new Set(classes.map((c) => c.category).filter(Boolean))).map((cat) => (
+                    <SelectItem key={cat as string} value={cat as string}>
+                      {cat as string}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
               <Label>Select Classes *</Label>
               <ScrollArea className="h-64 border rounded-md p-4">
                 {loadingClasses ? (
@@ -333,7 +368,11 @@ export default function AdminPackages() {
                   <p className="text-sm text-muted-foreground">No classes available</p>
                 ) : (
                   <div className="space-y-2">
-                    {classes.map((cls) => (
+                    {classes
+                      .filter((cls) =>
+                        formData.subject ? (cls.category || '').toLowerCase() === formData.subject?.toLowerCase() : true
+                      )
+                      .map((cls) => (
                       <div key={cls.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={`class-${cls.id}`}
@@ -354,6 +393,37 @@ export default function AdminPackages() {
               <p className="text-xs text-muted-foreground">
                 Selected: {(formData.class_ids || []).length} class(es)
               </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="billing_type">Billing Type</Label>
+              <Select
+                value={formData.billing_type || 'recurring'}
+                onValueChange={(value) => setFormData({ ...formData, billing_type: value as any })}
+              >
+                <SelectTrigger id="billing_type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="one-time">One-time</SelectItem>
+                  <SelectItem value="recurring">Recurring</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="package_type">Plan Type</Label>
+              <Select
+                value={formData.package_type || 'group'}
+                onValueChange={(value) => setFormData({ ...formData, package_type: value as any })}
+              >
+                <SelectTrigger id="package_type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="group">Group</SelectItem>
+                  <SelectItem value="1:1">1:1</SelectItem>
+                  <SelectItem value="hybrid">Hybrid</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center gap-2">
               <Switch
@@ -382,7 +452,7 @@ export default function AdminPackages() {
               <div className="flex flex-col">
                 <Label htmlFor="is_active" className="cursor-pointer">Active</Label>
                 <p className="text-xs text-muted-foreground">
-                  Inactive packages won't be available for new subscriptions but existing subscriptions remain valid
+                  Inactive plans won't be available for new subscriptions but existing subscriptions remain valid
                 </p>
               </div>
             </div>

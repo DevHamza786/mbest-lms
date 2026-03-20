@@ -52,9 +52,24 @@ export default function TutorAssignments() {
     max_points: 100,
     submission_type: 'file' as 'file' | 'text' | 'link',
     status: 'draft' as 'draft' | 'published' | 'archived',
+    materials: [] as File[],
   });
 
   const [newAssignment, setNewAssignment] = useState(resetFormState());
+
+  const getTodayISO = () => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  const todayISO = getTodayISO();
+  const isFutureDueDate = (value: string) => {
+    const date = new Date(value + 'T00:00:00');
+    const today = new Date(todayISO + 'T00:00:00');
+    return date.getTime() > today.getTime();
+  };
 
   useEffect(() => {
     loadClasses();
@@ -138,6 +153,15 @@ export default function TutorAssignments() {
       return;
     }
 
+    if (isFutureDueDate(newAssignment.due_date)) {
+      toast({
+        title: "Validation Error",
+        description: "Due date cannot be in the future.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       await tutorApi.createAssignment({
         title: newAssignment.title,
@@ -148,6 +172,7 @@ export default function TutorAssignments() {
         max_points: newAssignment.max_points,
         submission_type: newAssignment.submission_type,
         status: newAssignment.status,
+        materials: newAssignment.materials.length ? newAssignment.materials : undefined,
       });
 
       setNewAssignment(resetFormState());
@@ -180,6 +205,7 @@ export default function TutorAssignments() {
       max_points: assignment.max_points,
       submission_type: assignment.submission_type as 'file' | 'text' | 'link',
       status: assignment.status as 'draft' | 'published' | 'archived',
+      materials: [],
     });
     setIsEditOpen(true);
   };
@@ -189,6 +215,15 @@ export default function TutorAssignments() {
       toast({
         title: "Missing Information",
         description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isFutureDueDate(newAssignment.due_date)) {
+      toast({
+        title: "Validation Error",
+        description: "Due date cannot be in the future.",
         variant: "destructive",
       });
       return;
@@ -389,6 +424,19 @@ export default function TutorAssignments() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="assignmentMaterials">Assignment Materials (optional)</Label>
+                <Input
+                  id="assignmentMaterials"
+                  type="file"
+                  multiple
+                  onChange={(e) => {
+                    const files = e.target.files ? Array.from(e.target.files) : [];
+                    setNewAssignment((prev) => ({ ...prev, materials: files }));
+                  }}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="dueDate">Due Date *</Label>
@@ -397,6 +445,7 @@ export default function TutorAssignments() {
                     type="date"
                     value={newAssignment.due_date}
                     onChange={(e) => setNewAssignment(prev => ({ ...prev, due_date: e.target.value }))}
+                  max={todayISO}
                   />
                 </div>
                 <div className="space-y-2">
@@ -406,7 +455,10 @@ export default function TutorAssignments() {
                     type="number"
                     min="1"
                     value={newAssignment.max_points}
-                    onChange={(e) => setNewAssignment(prev => ({ ...prev, max_points: parseInt(e.target.value) || 100 }))}
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    setNewAssignment(prev => ({ ...prev, max_points: Number.isNaN(parsed) ? 0 : parsed }));
+                  }}
                   />
                 </div>
               </div>
@@ -760,6 +812,7 @@ export default function TutorAssignments() {
                   type="date"
                   value={newAssignment.due_date}
                   onChange={(e) => setNewAssignment(prev => ({ ...prev, due_date: e.target.value }))}
+                  max={todayISO}
                 />
               </div>
               <div className="space-y-2">
@@ -769,7 +822,10 @@ export default function TutorAssignments() {
                   type="number"
                   min="1"
                   value={newAssignment.max_points}
-                  onChange={(e) => setNewAssignment(prev => ({ ...prev, max_points: parseInt(e.target.value) || 100 }))}
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    setNewAssignment(prev => ({ ...prev, max_points: Number.isNaN(parsed) ? 0 : parsed }));
+                  }}
                 />
               </div>
             </div>

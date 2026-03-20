@@ -137,6 +137,7 @@ export interface AdminClass {
 export interface AdminInvoice {
   id: number;
   invoice_number: string;
+  created_at?: string;
   student_id?: number;
   parent_id?: number;
   tutor_id?: number;
@@ -243,6 +244,13 @@ export const adminApi = {
       };
     }
     return { users: [], total: 0, current_page: 1, last_page: 1 };
+  },
+
+  async getTutor(tutorId: number): Promise<{ id: number; user_id: number; hourly_rate?: number; user: { id: number; name: string; email: string } }> {
+    const response = await apiClient.get<any>(`/admin/tutors/${tutorId}`);
+    const raw = (response as any).data;
+    if (!raw) throw new Error('Tutor not found');
+    return (typeof raw === 'object' && raw.data !== undefined ? raw.data : raw) as any;
   },
 
   async getUser(id: number): Promise<AdminUser> {
@@ -352,6 +360,23 @@ export const adminApi = {
     await apiClient.delete(`/admin/classes/${id}`);
   },
 
+  async getPackageStats(): Promise<{
+    packages: Array<{ id: number; name: string; price: string | number; active_students: number; revenue: number }>;
+    total_revenue_from_packages: number;
+    total_active_students: number;
+  }> {
+    const response = await apiClient.get<any>('/admin/billing/package-stats');
+    if (response.success && (response as any).data) {
+      const d = (response as any).data;
+      return {
+        packages: d.packages || [],
+        total_revenue_from_packages: d.total_revenue_from_packages ?? 0,
+        total_active_students: d.total_active_students ?? 0,
+      };
+    }
+    return { packages: [], total_revenue_from_packages: 0, total_active_students: 0 };
+  },
+
   async getInvoices(params?: {
     status?: string;
     student_id?: number;
@@ -362,8 +387,15 @@ export const adminApi = {
     per_page?: number;
     page?: number;
     search?: string;
+    sort_by?: string;
+    order?: 'asc' | 'desc';
   }): Promise<{ invoices: AdminInvoice[]; total: number; current_page: number; last_page: number }> {
-    const response = await apiClient.get<PaginatedResponse<AdminInvoice>>('/admin/billing/invoices', params);
+    const requestParams = {
+      ...params,
+      sort_by: params?.sort_by ?? 'created_at',
+      order: params?.order ?? 'desc',
+    };
+    const response = await apiClient.get<PaginatedResponse<AdminInvoice>>('/admin/billing/invoices', requestParams);
     if (response.success && response.data) {
       return {
         invoices: response.data.data || [],
@@ -467,8 +499,9 @@ export const adminApi = {
     student_ids?: number[];
   }): Promise<AdminSession> {
     const response = await apiClient.post<{ data: AdminSession }>('/admin/calendar/sessions', data);
-    if (!response.data) throw new Error('Failed to create session');
-    return response.data.data;
+    const respData = (response as any).data;
+    if (!respData) throw new Error('Failed to create session');
+    return (typeof respData === 'object' && respData.data !== undefined ? respData.data : respData) as AdminSession;
   },
 
   async getSessions(params?: {
@@ -505,8 +538,9 @@ export const adminApi = {
 
   async getSession(id: number): Promise<AdminSession> {
     const response = await apiClient.get<{ data: AdminSession }>(`/admin/calendar/sessions/${id}`);
-    if (!response.data) throw new Error('Session not found');
-    return response.data.data;
+    const respData = (response as any).data;
+    if (!respData) throw new Error('Session not found');
+    return (typeof respData === 'object' && respData.data !== undefined ? respData.data : respData) as AdminSession;
   },
 
   async updateSession(id: number, data: {
@@ -522,8 +556,9 @@ export const adminApi = {
     student_ids?: number[];
   }): Promise<AdminSession> {
     const response = await apiClient.put<{ data: AdminSession }>(`/admin/calendar/sessions/${id}`, data);
-    if (!response.data) throw new Error('Failed to update session');
-    return response.data.data;
+    const resData = (response as any).data;
+    if (!resData) throw new Error('Failed to update session');
+    return (typeof resData === 'object' && resData.data !== undefined ? resData.data : resData) as AdminSession;
   },
 
   async addSessionNotes(id: number, data: {
@@ -539,8 +574,9 @@ export const adminApi = {
     }>;
   }): Promise<AdminSession> {
     const response = await apiClient.post<{ data: AdminSession }>(`/admin/calendar/sessions/${id}/notes`, data);
-    if (!response.data) throw new Error('Failed to add notes');
-    return response.data.data;
+    const resData = (response as any).data;
+    if (!resData) throw new Error('Failed to add notes');
+    return (typeof resData === 'object' && resData.data !== undefined ? resData.data : resData) as AdminSession;
   },
 
   async markSessionAttendance(id: number, attendance: Array<{
@@ -548,14 +584,16 @@ export const adminApi = {
     status: 'present' | 'absent' | 'late' | 'excused';
   }>): Promise<AdminSession> {
     const response = await apiClient.post<{ data: AdminSession }>(`/admin/calendar/sessions/${id}/attendance`, { attendance });
-    if (!response.data) throw new Error('Failed to mark attendance');
-    return response.data.data;
+    const resData = (response as any).data;
+    if (!resData) throw new Error('Failed to mark attendance');
+    return (typeof resData === 'object' && resData.data !== undefined ? resData.data : resData) as AdminSession;
   },
 
   async markSessionReadyForInvoicing(id: number): Promise<AdminSession> {
     const response = await apiClient.post<{ data: AdminSession }>(`/admin/calendar/sessions/${id}/mark-ready-invoice`, {});
-    if (!response.data) throw new Error('Failed to mark ready for invoicing');
-    return response.data.data;
+    const resData = (response as any).data;
+    if (!resData) throw new Error('Failed to mark ready for invoicing');
+    return (typeof resData === 'object' && resData.data !== undefined ? resData.data : resData) as AdminSession;
   },
 
   async getCalendarFilterOptions(): Promise<{
@@ -782,6 +820,9 @@ export interface CreatePackageData {
   allows_one_on_one?: boolean;
   bank_details?: string;
   is_active?: boolean;
+   subject?: string;
+   billing_type?: 'one-time' | 'recurring';
+   package_type?: 'group' | '1:1' | 'hybrid';
 }
 
 export interface UpdatePackageData extends Partial<CreatePackageData> {}

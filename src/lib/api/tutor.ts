@@ -49,6 +49,7 @@ export interface TutoringSession {
   teacher_id: number;
   subject: string;
   year_level?: string;
+  class_id?: number | null;
   location: string;
   session_type: string;
   status: string;
@@ -69,6 +70,15 @@ export interface TutoringSession {
   studentNotes?: StudentNote[];
   // API might return student_notes in snake_case
   student_notes?: StudentNote[];
+
+  sessionFiles?: Array<{
+    id: number;
+    file_name?: string;
+    file_path?: string;
+    file_url?: string;
+    mime_type?: string;
+    file_size?: number;
+  }>;
 }
 
 export interface TutorAssignment {
@@ -83,6 +93,13 @@ export interface TutorAssignment {
   submission_type: string;
   allowed_file_types?: string[];
   status: string;
+
+  assignmentFiles?: Array<{
+    id: number;
+    file_name?: string;
+    file_path?: string;
+    file_url?: string;
+  }>;
 }
 
 export interface AssignmentSubmission {
@@ -264,6 +281,7 @@ export const tutorApi = {
     date_to?: string;
     status?: string;
     subject?: string;
+    year_level?: string;
     student_id?: number;
     class_id?: number;
     per_page?: number;
@@ -297,7 +315,36 @@ export const tutorApi = {
     student_ids: number[];
     class_id?: number;
     color?: string;
+    materials?: File[];
   }): Promise<TutoringSession> {
+    // If materials are provided, send multipart/form-data
+    if (data.materials && data.materials.length > 0) {
+      const formData = new FormData();
+      formData.append('date', data.date);
+      formData.append('start_time', data.start_time);
+      formData.append('end_time', data.end_time);
+      formData.append('subject', data.subject);
+      if (data.year_level) formData.append('year_level', data.year_level);
+      formData.append('location', data.location);
+      formData.append('session_type', data.session_type);
+      data.student_ids.forEach((id) => formData.append('student_ids[]', String(id)));
+      if (data.class_id !== undefined) formData.append('class_id', String(data.class_id));
+      if (data.color) formData.append('color', data.color);
+
+      data.materials.forEach((file) => {
+        formData.append('materials[]', file);
+      });
+
+      const response = await apiClient.post<{ data: TutoringSession }>(
+        '/tutor/sessions',
+        formData,
+        true,
+        true
+      );
+      if (!response.data) throw new Error('Failed to create session');
+      return response.data.data;
+    }
+
     const response = await apiClient.post<{ data: TutoringSession }>('/tutor/sessions', data);
     if (!response.data) throw new Error('Failed to create session');
     return response.data.data;
@@ -306,6 +353,19 @@ export const tutorApi = {
   async updateSession(id: number, data: Partial<TutoringSession>): Promise<TutoringSession> {
     const response = await apiClient.put<{ data: TutoringSession }>(`/tutor/sessions/${id}`, data);
     if (!response.data) throw new Error('Failed to update session');
+    return response.data.data;
+  },
+
+  async proposeReschedule(id: number, data: {
+    proposed_date: string;
+    proposed_start_time: string;
+    proposed_end_time: string;
+  }): Promise<TutoringSession> {
+    const response = await apiClient.post<{ data: TutoringSession }>(
+      `/tutor/sessions/${id}/propose-reschedule`,
+      data
+    );
+    if (!response.data) throw new Error('Failed to propose reschedule');
     return response.data.data;
   },
 
@@ -409,7 +469,33 @@ export const tutorApi = {
     submission_type: string;
     allowed_file_types?: string[];
     status?: string;
+    materials?: File[];
   }): Promise<TutorAssignment> {
+    if (data.materials && data.materials.length > 0) {
+      const formData = new FormData();
+      formData.append('title', data.title);
+      if (data.description) formData.append('description', data.description);
+      if (data.instructions) formData.append('instructions', data.instructions);
+      formData.append('class_id', String(data.class_id));
+      formData.append('due_date', data.due_date);
+      formData.append('max_points', String(data.max_points));
+      formData.append('submission_type', data.submission_type);
+      if (data.status) formData.append('status', data.status);
+
+      data.materials.forEach((file) => {
+        formData.append('materials[]', file);
+      });
+
+      const response = await apiClient.post<{ data: TutorAssignment }>(
+        '/tutor/assignments',
+        formData,
+        true,
+        true
+      );
+      if (!response.data) throw new Error('Failed to create assignment');
+      return response.data.data;
+    }
+
     const response = await apiClient.post<{ data: TutorAssignment }>('/tutor/assignments', data);
     if (!response.data) throw new Error('Failed to create assignment');
     return response.data.data;
@@ -529,7 +615,7 @@ export const tutorApi = {
     // Response structure: { success: true, data: paginated_records }
     // paginated_records = { data: [...records], current_page, last_page, ... }
     const paginatedData = response.data || {};
-    return Array.isArray(paginatedData) ? paginatedData : (paginatedData.data || []);
+    return Array.isArray(paginatedData) ? paginatedData : (((paginatedData as any).data) || []);
   },
 
   async getHoursWorked(params?: {

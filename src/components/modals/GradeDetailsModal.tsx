@@ -45,6 +45,43 @@ export const GradeDetailsModal: React.FC<GradeDetailsModalProps> = ({
     return "bg-red-500";
   };
 
+  const handleDownloadReport = () => {
+    const rows = (grades || []).map((g: any) => {
+      const grade = parseFloat(g.grade || 0);
+      const maxGrade = parseFloat(g.max_grade || 1);
+      const percentage = maxGrade > 0 ? Math.round((grade / maxGrade) * 1000) / 10 : 0;
+      const date = g.date || g.created_at || '';
+
+      const assessment = g.assessment || g.assignment?.title || 'Grade';
+      const category = g.category || '';
+      const notes = g.notes || '';
+
+      return [assessment, category, grade, maxGrade, percentage, date, notes];
+    });
+
+    const escapeCell = (value: any) => {
+      const s = String(value ?? '');
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+
+    const header = ['Assessment', 'Category', 'Grade', 'Max Grade', 'Percentage', 'Date', 'Notes'];
+    const csv = [
+      header.map(escapeCell).join(','),
+      ...rows.map((r) => r.map(escapeCell).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Grade-Report-${subject.subject || 'subject'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const averageGrade = hasGrades 
     ? grades.reduce((sum: number, gradeItem: any) => {
         const grade = parseFloat(gradeItem.grade || 0);
@@ -271,7 +308,7 @@ export const GradeDetailsModal: React.FC<GradeDetailsModalProps> = ({
             <Button variant="outline" onClick={onClose}>
               Close
             </Button>
-            <Button>
+            <Button onClick={handleDownloadReport} disabled={!hasGrades}>
               Download Report
             </Button>
           </div>

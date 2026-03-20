@@ -134,6 +134,15 @@ export const ViewSubmissionModal: React.FC<ViewSubmissionModalProps> = ({
                 </div>
               )}
 
+              {submission.student_comment && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Your Comment:</Label>
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm whitespace-pre-wrap">{submission.student_comment}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Grade and Feedback */}
               {submission.grade !== undefined && submission.grade !== null && (
                 <div className="space-y-2 pt-4 border-t">

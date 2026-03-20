@@ -32,10 +32,13 @@ export default function ParentAttendance() {
       return;
     }
 
+    let firstRun = true;
     const loadAttendance = async () => {
       try {
-        setIsLoading(true);
-        const response = await parentApi.getChildAttendance(Number(activeChild.id));
+        setIsLoading(firstRun);
+        const response = await parentApi.getChildAttendance(Number(activeChild.id), {
+          per_page: 50,
+        });
         
         // Map API response to AttendanceRecord format
         const records = response.records || [];
@@ -55,11 +58,21 @@ export default function ParentAttendance() {
         console.error('Failed to load attendance:', error);
         setAttendanceRecords([]);
       } finally {
+        firstRun = false;
         setIsLoading(false);
       }
     };
 
     loadAttendance();
+
+    // Hot-reload: refresh attendance periodically (backend updates are not pushed via websockets)
+    const interval = window.setInterval(() => {
+      loadAttendance();
+    }, 10000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
   }, [activeChild?.id]);
 
   // Calculate class stats from attendance records
