@@ -62,7 +62,6 @@ import TutorHours from "./pages/tutor/TutorHours";
 import TutorAvailability from "./pages/tutor/TutorAvailability";
 import TutorLessonRequests from "./pages/tutor/TutorLessonRequests";
 import TutorLessonHistory from "./pages/tutor/TutorLessonHistory";
-import TutorProfile from "./pages/tutor/TutorProfile";
 import TutorQuestions from "./pages/tutor/TutorQuestions";
 
 // Parent pages
@@ -241,87 +240,87 @@ const App = () => (
                   <Routes>
                     <Route index element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorDashboard />
+                          <TutorDashboard />
                       </ProtectedRoute>
                     } />
                     <Route path="calendar" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorCalendar />
+                          <TutorCalendar />
                       </ProtectedRoute>
                     } />
                     <Route path="attendance" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorAttendance />
+                          <TutorAttendance />
                       </ProtectedRoute>
                     } />
                     <Route path="attendance-records" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorAttendanceRecords />
+                          <TutorAttendanceRecords />
                       </ProtectedRoute>
                     } />
                     <Route path="classes" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorClasses />
+                          <TutorClasses />
                       </ProtectedRoute>
                     } />
                     <Route path="students" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorStudents />
+                          <TutorStudents />
                       </ProtectedRoute>
                     } />
                     <Route path="assignments" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorAssignments />
+                          <TutorAssignments />
                       </ProtectedRoute>
                     } />
                     <Route path="assignments/:id" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorAssignmentDetail />
+                          <TutorAssignmentDetail />
                       </ProtectedRoute>
                     } />
                     <Route path="lesson-requests" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorLessonRequests />
+                          <TutorLessonRequests />
                       </ProtectedRoute>
                     } />
                     <Route path="questions" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorQuestions />
+                          <TutorQuestions />
                       </ProtectedRoute>
                     } />
                     <Route path="lesson-history" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorLessonHistory />
+                          <TutorLessonHistory />
                       </ProtectedRoute>
                     } />
                     <Route path="resources" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorResources />
+                          <TutorResources />
                       </ProtectedRoute>
                     } />
                     <Route path="messaging" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorMessaging />
+                          <TutorMessaging />
                       </ProtectedRoute>
                     } />
                     <Route path="attendance" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorAttendance />
+                          <TutorAttendance />
                       </ProtectedRoute>
                     } />
                     <Route path="hours" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorHours />
+                          <TutorHours />
                       </ProtectedRoute>
                     } />
                     <Route path="availability" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorAvailability />
+                          <TutorAvailability />
                       </ProtectedRoute>
                     } />
                     <Route path="profile" element={
                       <ProtectedRoute allowedRoles={['tutor']}>
-                        <TutorProfile />
+                        <Navigate to="/profile/settings" replace />
                       </ProtectedRoute>
                     } />
                   </Routes>

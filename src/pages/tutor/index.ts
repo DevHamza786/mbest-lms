@@ -1,5 +1,4 @@
 export { default as TutorDashboard } from './TutorDashboard';
-export { default as TutorProfile } from './TutorProfile';
 export { default as TutorClasses } from './TutorClasses';
 export { default as TutorStudents } from './TutorStudents';
 export { default as TutorAssignments } from './TutorAssignments';

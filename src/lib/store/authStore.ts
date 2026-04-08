@@ -23,24 +23,24 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
     try {
       const response = await authApi.login(credentials);
-      
+      const u = response.user as Session & { id: number | string };
+
       // Map backend user to frontend session format
       const session: Session = {
-        id: String(response.user.id),
-        name: response.user.name,
-        email: response.user.email,
-        role: response.user.role as any,
-        avatar: response.user.avatar,
+        id: String(u.id),
+        name: u.name,
+        email: u.email,
+        role: u.role as any,
+        avatar: u.avatar,
       };
-      
       // Store session with token in localStorage
       const sessionWithToken = { ...session, token: response.token };
       setStorageItem(STORAGE_KEYS.SESSION, sessionWithToken);
-      
+
       // Ensure token is set in API client (authApi.login already does this, but ensure it's done)
       const { apiClient } = await import('@/lib/api');
       apiClient.setToken(response.token);
-      
+
       set({ session, isLoading: false });
     } catch (error) {
       set({ 
@@ -56,24 +56,24 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
     try {
       const response = await authApi.register(data);
-      
+      const u = response.user as Session & { id: number | string };
+
       // Map backend user to frontend session format
       const session: Session = {
-        id: String(response.user.id),
-        name: response.user.name,
-        email: response.user.email,
-        role: response.user.role as any,
-        avatar: response.user.avatar,
+        id: String(u.id),
+        name: u.name,
+        email: u.email,
+        role: u.role as any,
+        avatar: u.avatar,
       };
-      
       // Store session with token in localStorage
       const sessionWithToken = { ...session, token: response.token };
       setStorageItem(STORAGE_KEYS.SESSION, sessionWithToken);
-      
+
       // Ensure token is set in API client (authApi.register already does this, but ensure it's done)
       const { apiClient } = await import('@/lib/api');
       apiClient.setToken(response.token);
-      
+
       set({ session, isLoading: false });
     } catch (error) {
       set({ 

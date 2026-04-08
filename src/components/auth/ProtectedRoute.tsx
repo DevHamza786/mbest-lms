@@ -39,9 +39,8 @@ export function ProtectedRoute({
 
     // If user is trying to access a different role's portal, redirect them
     if (!isPortalPath(location.pathname, session.role)) {
-      // For parents, always redirect to subscription page (SubscriptionGuard will handle dashboard redirect if active)
       if (session.role === 'parent') {
-        navigate('/parent/subscription', { replace: true });
+        navigate('/parent', { replace: true });
         return;
       }
       const correctPortal = getPortalRoot(session.role);

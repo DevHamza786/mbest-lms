@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar, Clock, MapPin, ExternalLink, Users, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { studentApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { sessionIsOnline } from '@/lib/sessionLocation';
 
 interface ClassScheduleModalProps {
   isOpen: boolean;
@@ -215,10 +216,15 @@ export const ClassScheduleModal: React.FC<ClassScheduleModalProps> = ({
                     {upcomingSessions.map((session) => {
                       const sessionDate = new Date(session.date);
                       const timeRange = `${formatTime(session.start_time)} - ${formatTime(session.end_time)}`;
-                      const location = session.location === 'centre' ? (session.room || session.location || 'TBD') : 
-                                      session.location === 'online' ? 'Online' : 
-                                      session.location === 'home' ? 'Home' : session.room || session.location || 'TBD';
-                      const meetingLink = session.location === 'online' ? (session.meeting_link || 'https://meet.google.com/abc-def-123') : null;
+                      const location = sessionIsOnline(session)
+                        ? (session.location_detail?.trim() || 'Online')
+                        : (session.location_detail?.trim() || session.room || 'Onsite');
+                      const detail = session.location_detail?.trim();
+                      const meetingLink = sessionIsOnline(session)
+                        ? (detail && /^https?:\/\//i.test(detail)
+                            ? detail
+                            : (session.meeting_link || 'https://meet.google.com/abc-def-123'))
+                        : null;
                       const attendanceStatus = session.attendance_status;
                       
                       return (

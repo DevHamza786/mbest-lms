@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { tutorApi } from '@/lib/api/tutor';
 import { useSession } from '@/lib/store/authStore';
 
@@ -10,9 +11,16 @@ export function usePendingLessonRequestsCount() {
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const session = useSession();
+  const location = useLocation();
 
   useEffect(() => {
     if (!session?.id || session.role !== 'tutor') {
+      setPendingCount(0);
+      setLoading(false);
+      return;
+    }
+
+    if (location.pathname.startsWith('/tutor/availability')) {
       setPendingCount(0);
       setLoading(false);
       return;
@@ -32,7 +40,7 @@ export function usePendingLessonRequestsCount() {
 
         setPendingCount(requests.length);
         setLoading(false);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Failed to fetch pending lesson requests count:', error);
         if (mounted) {
           setPendingCount(0);
@@ -55,7 +63,7 @@ export function usePendingLessonRequestsCount() {
       mounted = false;
       clearInterval(pollInterval);
     };
-  }, [session?.id, session?.role]);
+  }, [session?.id, session?.role, location.pathname]);
 
   return { pendingCount, loading };
 }

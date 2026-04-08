@@ -14,8 +14,20 @@ export interface AdminUser {
   address?: string;
   is_active: boolean;
   created_at: string;
+  is_incomplete_profile?: boolean;
+  /** Parent subscription plan (User.package); tutors/students typically unset */
+  package?: { id: number; name: string };
+  /** Distinct students in this tutor's classes (admin list API) */
+  tutor_students_taught_count?: number;
+  /** Linked children for parent users */
+  children_count?: number;
+  /** Enrolled classes for student users */
+  enrolled_classes_count?: number;
+  /** First linked parent's subscription name for students */
+  family_package_name?: string | null;
   tutor?: {
     id: number;
+    profile_complete?: boolean;
     department?: string;
     specialization?: string[];
     hourly_rate?: number;
@@ -188,7 +200,10 @@ export interface AdminSession {
   end_time: string;
   subject: string;
   year_level?: string;
-  location: string;
+  location_type: 'online' | 'onsite';
+  location_detail?: string | null;
+  /** Virtual: combined display string from API. */
+  location?: string;
   session_type: string;
   status: string;
   teacher: {
@@ -228,8 +243,11 @@ export const adminApi = {
 
   async getUsers(params?: {
     role?: string;
+    /** Comma-separated e.g. `tutor,parent` */
+    roles?: string;
     search?: string;
     is_active?: boolean;
+    department?: string;
     per_page?: number;
     page?: number;
   }): Promise<{ users: AdminUser[]; total: number; current_page: number; last_page: number }> {
@@ -319,6 +337,7 @@ export const adminApi = {
   async getClasses(params?: {
     status?: string;
     category?: string;
+    level?: string;
     tutor_id?: number;
     search?: string;
     per_page?: number;
@@ -397,7 +416,7 @@ export const adminApi = {
     return { packages: [], total_revenue_from_packages: 0, total_active_students: 0 };
   },
 
-  /** Aggregated billing KPIs (invoices + users) — replaces client-side dummy totals */
+  /** Aggregated billing KPIs (revenue/pending from payments API; overdue from invoices) */
   async getBillingSummary(): Promise<{
     total_revenue: number;
     pending_amount: number;
@@ -556,7 +575,8 @@ export const adminApi = {
     class_id?: number;
     subject: string;
     year_level?: string;
-    location: string;
+    location_type: 'online' | 'onsite';
+    location_detail?: string;
     session_type: '1:1' | 'group';
     status?: string;
     student_ids?: number[];
@@ -612,7 +632,8 @@ export const adminApi = {
     end_time?: string;
     subject?: string;
     year_level?: string;
-    location?: string;
+    location_type?: 'online' | 'onsite';
+    location_detail?: string;
     session_type?: string;
     status?: string;
     teacher_id?: number;

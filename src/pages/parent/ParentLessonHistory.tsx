@@ -47,7 +47,9 @@ export default function ParentLessonHistory() {
           studentNames: [activeChild?.name || ''],
           subject: s.subject,
           yearLevel: s.year_level || '',
-          location: (s.location === 'online' || s.location === 'home' || s.location === 'centre') ? s.location : 'online',
+          locationType: s.location_type === 'online' ? 'online' : 'onsite',
+          locationDetail: (s.location_detail ?? '').trim(),
+          locationLabel: s.location,
           sessionType: s.session_type === '1:1' || s.session_type === 'group' ? s.session_type : '1:1',
           status:
             s.status === 'planned' ||

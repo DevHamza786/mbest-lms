@@ -146,7 +146,12 @@ export function SessionDetailSheet({
               <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
                 <p className="text-sm font-medium">Location</p>
-                <p className="text-sm text-muted-foreground capitalize">{session.location}</p>
+                <p className="text-sm text-muted-foreground capitalize">
+                  {session.locationLabel ||
+                    (session.locationDetail
+                      ? `${session.locationType} · ${session.locationDetail}`
+                      : session.locationType)}
+                </p>
               </div>
             </div>
 

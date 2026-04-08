@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { adminApi, apiClient } from '@/lib/api';
+import { sessionIsOnline } from '@/lib/sessionLocation';
 
 interface AttendanceRecord {
   id: number;
@@ -230,7 +231,7 @@ export default function AdminAttendance() {
         
         // Calculate hours
         const hours = calculateHours(session.start_time, session.end_time);
-        const isOnline = !session.location || session.location.toLowerCase().includes('online');
+        const isOnline = sessionIsOnline(session as any);
         
         if (!timesheetMap.has(key)) {
           timesheetMap.set(key, {

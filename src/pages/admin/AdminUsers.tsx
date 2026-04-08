@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Plus, MoreVertical, User, Users, GraduationCap, UserCheck, Loader2 } from 'lucide-react';
+import { Search, Filter, Plus, MoreVertical, User, Users, GraduationCap, UserCheck, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Table, 
   TableBody, 
@@ -36,6 +35,7 @@ import {
   DialogTrigger 
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { adminApi, AdminUser } from '@/lib/api/admin';
 import {
@@ -45,17 +45,23 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-  PaginationEllipsis,
 } from '@/components/ui/pagination';
+
+type AdminListRoleFilter = 'tutor' | 'parent' | 'student';
 
 export default function AdminUsers() {
   const { toast } = useToast();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState('all');
+  const [searchInput, setSearchInput] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<AdminListRoleFilter>('tutor');
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const [appliedAccountStatus, setAppliedAccountStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [appliedDepartment, setAppliedDepartment] = useState('');
+  const [draftAccountStatus, setDraftAccountStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [draftDepartment, setDraftDepartment] = useState('');
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
@@ -81,6 +87,8 @@ export default function AdminUsers() {
     password: '',
     confirmPassword: '',
   });
+  const [showResetPasswordNew, setShowResetPasswordNew] = useState(false);
+  const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -118,16 +126,19 @@ export default function AdminUsers() {
         page: currentPage,
       };
 
-      // Apply role filter based on active tab
-      if (activeTab !== 'all') {
-        params.role = activeTab === 'students' ? 'student' : activeTab.slice(0, -1); // Remove 's' from end
-      } else if (roleFilter !== 'all') {
-        params.role = roleFilter;
+      params.role = roleFilter;
+
+      if (appliedSearch) {
+        params.search = appliedSearch;
       }
 
-      // Apply search
-      if (searchTerm) {
-        params.search = searchTerm;
+      if (appliedAccountStatus !== 'all') {
+        params.is_active = appliedAccountStatus === 'active';
+      }
+
+      const dept = appliedDepartment.trim();
+      if (dept) {
+        params.department = dept;
       }
 
       const result = await adminApi.getUsers(params);
@@ -154,22 +165,38 @@ export default function AdminUsers() {
     fetchUserStats();
   }, []);
 
-  useEffect(() => {
-    setCurrentPage(1); // Reset to first page when filters change
-  }, [activeTab, roleFilter]);
+  const applySearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setCurrentPage(1);
+  };
 
-  // Debounce search separately
+  const clearAppliedSearch = () => {
+    setSearchInput('');
+    setAppliedSearch('');
+    setCurrentPage(1);
+  };
+
+  const searchInputEmpty = searchInput.trim() === '';
+  const showClearSearchButton = searchInputEmpty && appliedSearch !== '';
+
+  const handleSearchControlClick = () => {
+    if (showClearSearchButton) {
+      clearAppliedSearch();
+      return;
+    }
+    if (!searchInputEmpty) {
+      applySearch();
+    }
+  };
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setCurrentPage(1);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+    setCurrentPage(1);
+  }, [roleFilter]);
 
   useEffect(() => {
     fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, roleFilter, searchTerm, currentPage]);
+  }, [roleFilter, appliedSearch, appliedAccountStatus, appliedDepartment, currentPage]);
 
   // Refresh stats after user operations
   const refreshStats = () => {
@@ -289,6 +316,8 @@ export default function AdminUsers() {
       password: '',
       confirmPassword: '',
     });
+    setShowResetPasswordNew(false);
+    setShowResetPasswordConfirm(false);
     setResetPasswordDialogOpen(true);
   };
 
@@ -419,52 +448,51 @@ export default function AdminUsers() {
     },
   ];
 
-  // Get department from tutor relationship
-  const getDepartment = (user: AdminUser) => {
-    if (user.role === 'tutor' && (user as any).tutor?.department) {
-      return (user as any).tutor.department;
-    }
-    return '-';
+  const getSpecialization = (user: AdminUser): string[] => {
+    if (user.role !== 'tutor' || !user.tutor?.specialization) return [];
+    const s = user.tutor.specialization;
+    return Array.isArray(s) ? s : [];
   };
 
-  // Get specialization from tutor relationship
-  const getSpecialization = (user: AdminUser) => {
-    if (user.role === 'tutor' && (user as any).tutor?.specialization) {
-      return (user as any).tutor.specialization;
+  const getTutorHourlyRateDisplay = (user: AdminUser): string => {
+    if (user.role !== 'tutor' || user.tutor?.hourly_rate == null) {
+      return '—';
     }
-    return [];
+    const n = Number(user.tutor.hourly_rate);
+    if (Number.isNaN(n)) return '—';
+    return `$${n.toFixed(2)}/hr`;
   };
 
-  // Filter users for display (client-side filtering for tabs, excluding admins)
-  const displayedUsers = useMemo(() => {
-    // Already filtered in fetchUsers, but double-check to exclude admins
-    let filtered = users.filter(user => user.role !== 'admin');
-    
-    if (activeTab === 'all') {
-      return filtered;
-    }
-    const roleMap: Record<string, string> = {
-      'students': 'student',
-      'tutors': 'tutor',
-      'parents': 'parent',
-    };
-    return filtered.filter(user => user.role === roleMap[activeTab]);
-  }, [users, activeTab]);
+  const firstDetailColumnTitle: string =
+    roleFilter === 'tutor'
+      ? 'Specialization'
+      : roleFilter === 'parent'
+        ? 'Package'
+        : 'Family package';
 
-  // Memoize student users to avoid re-filtering
-  const studentUsers = useMemo(() => {
-    return displayedUsers.filter(user => user.role === 'student');
-  }, [displayedUsers]);
+  const secondDetailColumnTitle: string =
+    roleFilter === 'tutor'
+      ? 'Hourly rate'
+      : roleFilter === 'parent'
+        ? 'Student count'
+        : 'Classes';
 
-  // Memoize tutor users
-  const tutorUsers = useMemo(() => {
-    return displayedUsers.filter(user => user.role === 'tutor');
-  }, [displayedUsers]);
+  const renderPackageOrFamilyPlanCell = (user: AdminUser): string => {
+    if (user.role === 'parent') return user.package?.name ?? '—';
+    if (user.role === 'student') return user.family_package_name ?? '—';
+    return '—';
+  };
 
-  // Memoize parent users
-  const parentUsers = useMemo(() => {
-    return displayedUsers.filter(user => user.role === 'parent');
-  }, [displayedUsers]);
+  const renderCountCell = (user: AdminUser): string => {
+    if (user.role === 'parent') return String(user.children_count ?? 0);
+    if (user.role === 'student') return String(user.enrolled_classes_count ?? 0);
+    return '—';
+  };
+
+  const displayedUsers = useMemo(
+    () => users.filter((user) => user.role !== 'admin'),
+    [users]
+  );
 
   if (loading && users.length === 0) {
     return (
@@ -481,7 +509,7 @@ export default function AdminUsers() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">User Management</h1>
           <p className="text-muted-foreground">
-            Manage students, tutors, parents, and administrators
+            Manage students, tutors, and parents
           </p>
         </div>
         <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
@@ -587,48 +615,138 @@ export default function AdminUsers() {
         })}
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="all">All Users</TabsTrigger>
-          <TabsTrigger value="students">Students</TabsTrigger>
-          <TabsTrigger value="tutors">Tutors</TabsTrigger>
-          <TabsTrigger value="parents">Parents</TabsTrigger>
-        </TabsList>
-
-        <div className="flex gap-4">
-          <div className="relative flex-1">
+      <div className="space-y-6">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
+              name="admin-user-list-search"
+              autoComplete="off"
               placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSearchControlClick();
+                }
+              }}
               className="pl-10"
             />
           </div>
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-[180px]">
+          <Button
+            type="button"
+            variant={showClearSearchButton ? 'outline' : 'default'}
+            disabled={searchInputEmpty && !appliedSearch}
+            onClick={handleSearchControlClick}
+          >
+            {showClearSearchButton ? 'Clear Search' : 'Search'}
+          </Button>
+          <Select
+            value={roleFilter}
+            onValueChange={(v) => setRoleFilter(v as AdminListRoleFilter)}
+          >
+            <SelectTrigger className="w-[220px]">
               <SelectValue placeholder="Filter by role" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              <SelectItem value="admin">Administrators</SelectItem>
               <SelectItem value="tutor">Tutors</SelectItem>
-              <SelectItem value="student">Students</SelectItem>
               <SelectItem value="parent">Parents</SelectItem>
+              <SelectItem value="student">Students</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline">
-            <Filter className="mr-2 h-4 w-4" />
-            More Filters
-          </Button>
+          <Popover
+            open={moreFiltersOpen}
+            onOpenChange={(open) => {
+              setMoreFiltersOpen(open);
+              if (open) {
+                setDraftAccountStatus(appliedAccountStatus);
+                setDraftDepartment(appliedDepartment);
+              }
+            }}
+          >
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" className="relative">
+                <Filter className="mr-2 h-4 w-4" />
+                More Filters
+                {(appliedAccountStatus !== 'all' || appliedDepartment.trim() !== '') && (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] text-primary-foreground">
+                    {(appliedAccountStatus !== 'all' ? 1 : 0) + (appliedDepartment.trim() ? 1 : 0)}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="end">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Account status</Label>
+                  <Select
+                    value={draftAccountStatus}
+                    onValueChange={(v) => setDraftAccountStatus(v as 'all' | 'active' | 'inactive')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="active">Active only</SelectItem>
+                      <SelectItem value="inactive">Inactive only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filter-department">Department (tutors)</Label>
+                  <Input
+                    id="filter-department"
+                    name="admin-user-filter-department"
+                    autoComplete="off"
+                    placeholder="e.g. Science"
+                    value={draftDepartment}
+                    onChange={(e) => setDraftDepartment(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Narrows to tutor profiles whose department contains this text.
+                  </p>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setDraftAccountStatus('all');
+                      setDraftDepartment('');
+                      setAppliedAccountStatus('all');
+                      setAppliedDepartment('');
+                      setCurrentPage(1);
+                      setMoreFiltersOpen(false);
+                    }}
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setAppliedAccountStatus(draftAccountStatus);
+                      setAppliedDepartment(draftDepartment.trim());
+                      setCurrentPage(1);
+                      setMoreFiltersOpen(false);
+                    }}
+                  >
+                    Apply filters
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
-        <TabsContent value="all" className="space-y-6">
-          <Card>
+        <Card>
             <CardHeader>
-              <CardTitle>All Users</CardTitle>
+              <CardTitle>Users</CardTitle>
               <CardDescription>
-                Complete list of all platform users
+                Tutors are shown by default. Switch the filter for parents or students. Admins are never listed here.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -642,12 +760,13 @@ export default function AdminUsers() {
                 <div className="text-center py-8 text-muted-foreground">No users found</div>
               ) : (
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-card shadow-sm [&_tr]:bg-card">
                     <TableRow>
                       <TableHead>User</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Department</TableHead>
+                      <TableHead>{firstDetailColumnTitle}</TableHead>
+                      <TableHead>{secondDetailColumnTitle}</TableHead>
                       <TableHead>Active</TableHead>
                       <TableHead>Joined</TableHead>
                       <TableHead>Actions</TableHead>
@@ -668,15 +787,46 @@ export default function AdminUsers() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={getRoleColor(user.role)}>
-                            <div className="flex items-center gap-1">
-                              {getRoleIcon(user.role)}
-                              {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                            </div>
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={getRoleColor(user.role)}>
+                              <div className="flex items-center gap-1">
+                                {getRoleIcon(user.role)}
+                                {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                              </div>
+                            </Badge>
+                            {user.is_incomplete_profile && (
+                              <Badge variant="destructive">Incomplete profile</Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
-                        <TableCell>{getDepartment(user)}</TableCell>
+                        <TableCell className="max-w-[220px]">
+                          {roleFilter === 'tutor' ? (
+                            getSpecialization(user).length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {getSpecialization(user).map((spec) => (
+                                  <Badge key={spec} variant="outline" className="text-xs font-normal">
+                                    {spec}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )
+                          ) : (
+                            <span
+                              className="line-clamp-2"
+                              title={renderPackageOrFamilyPlanCell(user)}
+                            >
+                              {renderPackageOrFamilyPlanCell(user)}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">
+                          {roleFilter === 'tutor'
+                            ? getTutorHourlyRateDisplay(user)
+                            : renderCountCell(user)}
+                        </TableCell>
                         <TableCell>
                           <Badge variant={user.is_active ? 'default' : 'secondary'}>
                             {user.is_active ? 'Active' : 'Inactive'}
@@ -772,231 +922,7 @@ export default function AdminUsers() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="students" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {loading ? (
-              <div className="col-span-full flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : studentUsers.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-muted-foreground">No students found</div>
-            ) : (
-              studentUsers.map((student) => (
-                <Card key={student.id}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={student.avatar || undefined} alt={student.name} />
-                          <AvatarFallback>
-                            {student.name.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <CardTitle className="text-lg">{student.name}{student.student?.grade ? ` – ${student.student.grade}` : ''}</CardTitle>
-                          <CardDescription>{student.email}</CardDescription>
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleViewProfile(student)}>View Details</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEditUser(student)}>Edit Student</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleResetPassword(student)}>Reset Password</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2 text-sm">
-                      {student.student?.grade && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Grade:</span>
-                          <span className="font-medium">{student.student.grade}</span>
-                        </div>
-                      )}
-                      {student.student?.enrollment_id && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Enrollment ID:</span>
-                          <span className="font-medium">{student.student.enrollment_id}</span>
-                        </div>
-                      )}
-                      {student.parents_data && student.parents_data.length > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Parent(s):</span>
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            {student.parents_data.map((parent) => (
-                              <div key={parent.id} className="flex items-center gap-2">
-                                <Avatar className="h-6 w-6">
-                                  <AvatarImage src={parent.avatar || undefined} alt={parent.name} />
-                                  <AvatarFallback className="text-xs">
-                                    {parent.name.split(' ').map(n => n[0]).join('')}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="text-xs font-medium">{parent.name}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Joined:</span>
-                        <span className="font-medium">
-                          {new Date(student.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Status:</span>
-                        <Badge variant={student.is_active ? 'default' : 'secondary'}>
-                          {student.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="tutors" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {loading ? (
-              <div className="col-span-full flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : tutorUsers.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-muted-foreground">No tutors found</div>
-            ) : (
-              tutorUsers.map((tutor) => (
-                <Card key={tutor.id}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={tutor.avatar || undefined} alt={tutor.name} />
-                          <AvatarFallback>
-                            {tutor.name.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <CardTitle className="text-lg">{tutor.name}</CardTitle>
-                          <CardDescription>{tutor.email}</CardDescription>
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleViewProfile(tutor)}>View Details</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEditUser(tutor)}>Edit Tutor</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleResetPassword(tutor)}>Reset Password</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Department:</span>
-                        <span className="font-medium">{getDepartment(tutor)}</span>
-                      </div>
-                      {getSpecialization(tutor).length > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Specializations:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {getSpecialization(tutor).map((spec: string) => (
-                              <Badge key={spec} variant="outline" className="text-xs">
-                                {spec}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Joined:</span>
-                        <span className="font-medium">
-                          {new Date(tutor.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="parents" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {loading ? (
-              <div className="col-span-full flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : parentUsers.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-muted-foreground">No parents found</div>
-            ) : (
-              parentUsers.map((parent) => (
-                <Card key={parent.id}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={parent.avatar || undefined} alt={parent.name} />
-                          <AvatarFallback>
-                            {parent.name.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <CardTitle className="text-lg">{parent.name}</CardTitle>
-                          <CardDescription>{parent.email}</CardDescription>
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleViewProfile(parent)}>View Details</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEditUser(parent)}>Edit Parent</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleResetPassword(parent)}>Reset Password</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Joined:</span>
-                        <span className="font-medium">
-                          {new Date(parent.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Status:</span>
-                        <Badge variant={parent.is_active ? 'default' : 'secondary'}>
-                          {parent.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+      </div>
 
       {/* Edit User Dialog */}
       <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
@@ -1064,7 +990,16 @@ export default function AdminUsers() {
       </Dialog>
 
       {/* Reset Password Dialog */}
-      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+      <Dialog
+        open={resetPasswordDialogOpen}
+        onOpenChange={(open) => {
+          setResetPasswordDialogOpen(open);
+          if (!open) {
+            setShowResetPasswordNew(false);
+            setShowResetPasswordConfirm(false);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Reset Password</DialogTitle>
@@ -1072,36 +1007,85 @@ export default function AdminUsers() {
               Set a new password for {selectedUser?.name}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
+          <form
+            className="space-y-4 mt-4"
+            autoComplete="off"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleResetPasswordSubmit();
+            }}
+          >
             <div className="space-y-2">
               <Label htmlFor="newPassword">New Password *</Label>
-              <Input 
-                id="newPassword" 
-                type="password" 
-                placeholder="Enter new password (min 8 characters)"
-                value={resetPasswordForm.password}
-                onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, password: e.target.value })}
-              />
+              <div className="relative">
+                <Input
+                  id="newPassword"
+                  name="admin-reset-password-new"
+                  type={showResetPasswordNew ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Enter new password (min 8 characters)"
+                  value={resetPasswordForm.password}
+                  onChange={(e) =>
+                    setResetPasswordForm({ ...resetPasswordForm, password: e.target.value })
+                  }
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowResetPasswordNew((v) => !v)}
+                  aria-label={showResetPasswordNew ? 'Hide password' : 'Show password'}
+                >
+                  {showResetPasswordNew ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password *</Label>
-              <Input 
-                id="confirmPassword" 
-                type="password" 
-                placeholder="Confirm new password"
-                value={resetPasswordForm.confirmPassword}
-                onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, confirmPassword: e.target.value })}
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  name="admin-reset-password-confirm"
+                  type={showResetPasswordConfirm ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Confirm new password"
+                  value={resetPasswordForm.confirmPassword}
+                  onChange={(e) =>
+                    setResetPasswordForm({ ...resetPasswordForm, confirmPassword: e.target.value })
+                  }
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowResetPasswordConfirm((v) => !v)}
+                  aria-label={showResetPasswordConfirm ? 'Hide password' : 'Show password'}
+                >
+                  {showResetPasswordConfirm ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setResetPasswordDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setResetPasswordDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleResetPasswordSubmit}>
+              <Button type="submit">
                 Reset Password
               </Button>
             </div>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -1146,10 +1130,6 @@ export default function AdminUsers() {
                       {selectedUser.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Department</Label>
-                  <p className="font-medium">{getDepartment(selectedUser)}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Joined</Label>

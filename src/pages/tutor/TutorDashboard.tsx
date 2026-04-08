@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { tutorApi } from '@/lib/api';
+import { sessionIsOnline } from '@/lib/sessionLocation';
 
 const TutorDashboard = () => {
   const navigate = useNavigate();
@@ -313,14 +314,20 @@ const TutorDashboard = () => {
   };
 
 
-  const upcomingClasses = (dashboardData.upcoming_sessions || []).slice(0, 2).map(session => ({
-    id: String(session.id),
-    name: session.subject,
-    time: `${session.start_time} - ${session.end_time}`,
-    students: session.students?.length || 0,
-    room: session.location === 'centre' ? 'Room TBD' : session.location,
-    meetingLink: session.location === 'online' ? 'https://meet.google.com/abc-xyz-123' : undefined,
-  }));
+  const upcomingClasses = (dashboardData.upcoming_sessions || []).slice(0, 2).map(session => {
+    const detail = (session as any).location_detail?.trim?.() as string | undefined;
+    const online = sessionIsOnline(session as any);
+    return {
+      id: String(session.id),
+      name: session.subject,
+      time: `${session.start_time} - ${session.end_time}`,
+      students: session.students?.length || 0,
+      room: online ? (detail && !/^https?:\/\//i.test(detail) ? detail : 'Online') : (detail || 'Onsite'),
+      meetingLink: online
+        ? (detail && /^https?:\/\//i.test(detail) ? detail : 'https://meet.google.com/abc-xyz-123')
+        : undefined,
+    };
+  });
 
   // Load recent assignments
   const [recentAssignments, setRecentAssignments] = useState<any[]>([]);

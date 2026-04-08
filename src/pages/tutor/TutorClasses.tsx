@@ -22,6 +22,7 @@ import {
   PaginationPrevious 
 } from '@/components/ui/pagination';
 import { Separator } from '@/components/ui/separator';
+import { sessionIsOnline } from '@/lib/sessionLocation';
 
 interface SessionDisplay {
   id: number;
@@ -228,19 +229,16 @@ export default function TutorClasses() {
         displayStatus = 'live';
       }
 
-      // Generate meeting link for online sessions
-      const meetingLink = session.location === 'online' 
-        ? `https://meet.google.com/${Math.random().toString(36).substr(2, 9)}`
+      const detail = session.location_detail?.trim();
+      const meetingLink = sessionIsOnline(session)
+        ? (detail && /^https?:\/\//i.test(detail)
+            ? detail
+            : `https://meet.google.com/${Math.random().toString(36).substr(2, 9)}`)
         : '#';
 
-      // Get location display
-      const locationDisplay = session.location === 'online' 
-        ? 'Online' 
-        : session.location === 'centre' 
-        ? 'Centre' 
-        : session.location === 'home'
-        ? 'Home'
-        : session.location;
+      const locationDisplay = sessionIsOnline(session)
+        ? (detail && !/^https?:\/\//i.test(detail) ? detail : detail || 'Online')
+        : (detail || 'Onsite');
 
       // Format date for display
       const dateObj = typeof session.date === 'string' 
@@ -359,7 +357,7 @@ export default function TutorClasses() {
       start_time: rawSession.start_time,
       end_time: rawSession.end_time,
       duration: durationMinutes.toString(),
-      location: rawSession.location,
+      location: sessionIsOnline(rawSession) ? 'online' : 'centre',
       session_type: rawSession.session_type,
       year_level: rawSession.year_level || '',
       status: rawSession.status,
@@ -922,7 +920,7 @@ export default function TutorClasses() {
                         )}
                         {session.status === 'scheduled' && (
                           <>
-                            {session.rawSession.location === 'online' && (
+                            {sessionIsOnline(session.rawSession) && (
                               <Button size="sm" variant="outline" asChild>
                                 <a href={session.meetingLink} target="_blank" rel="noopener noreferrer">
                                   <Video className="mr-2 h-4 w-4" />

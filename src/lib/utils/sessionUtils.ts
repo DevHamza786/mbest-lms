@@ -141,7 +141,7 @@ export function filterSessions(sessions: Session[], filter: Partial<Session>): S
   return sessions.filter(session => {
     if (filter.teacherId && session.teacherId !== filter.teacherId) return false;
     if (filter.subject && session.subject !== filter.subject) return false;
-    if (filter.location && session.location !== filter.location) return false;
+    if (filter.location && session.locationType !== filter.location) return false;
     if (filter.sessionType && session.sessionType !== filter.sessionType) return false;
     if (filter.status && session.status !== filter.status) return false;
     return true;

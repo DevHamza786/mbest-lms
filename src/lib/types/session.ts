@@ -2,7 +2,10 @@
 
 export type SessionStatus = 'planned' | 'completed' | 'cancelled' | 'no-show' | 'rescheduled';
 export type SessionType = '1:1' | 'group';
-export type SessionLocation = 'online' | 'centre' | 'home';
+/** How the session is delivered (matches tutoring_sessions.location_type). */
+export type SessionLocationMode = 'online' | 'onsite';
+/** @deprecated Filter / legacy — use SessionLocationMode */
+export type SessionLocation = SessionLocationMode;
 
 export interface StudentNote {
   studentId: string;
@@ -24,7 +27,10 @@ export interface Session {
   studentNames: string[];
   subject: string;
   yearLevel: string;
-  location: SessionLocation;
+  locationType: SessionLocationMode;
+  locationDetail: string;
+  /** Combined display from API (virtual `location`). */
+  locationLabel?: string;
   sessionType: SessionType;
   status: SessionStatus;
   color?: string; // For visual distinction
@@ -51,7 +57,8 @@ export interface SessionFormData {
   studentIds: string[];
   subject: string;
   yearLevel: string;
-  location: SessionLocation;
+  locationType: SessionLocationMode;
+  locationDetail: string;
   sessionType: SessionType;
   status: SessionStatus;
   occurrences?: number; // how many days/occurrences to create
@@ -61,7 +68,7 @@ export interface SessionFilter {
   teacherId?: string;
   studentId?: string;
   subject?: string;
-  location?: SessionLocation;
+  location?: SessionLocationMode;
   sessionType?: SessionType;
   status?: SessionStatus;
   dateFrom?: string;

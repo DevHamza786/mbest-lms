@@ -10,6 +10,7 @@ import { QuickActionsModal } from '@/components/modals/QuickActionsModal';
 import { useNavigate } from 'react-router-dom';
 import { studentApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { sessionIsOnline } from '@/lib/sessionLocation';
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -119,7 +120,9 @@ export default function StudentDashboard() {
       id: session.id,
       name: session.subject,
       time: `${session.start_time} - ${session.end_time}`,
-      room: session.location === 'centre' ? 'Room TBD' : session.location,
+      room: sessionIsOnline(session)
+        ? (session.location_detail?.trim() || 'Online')
+        : (session.location_detail?.trim() || 'Onsite'),
       tutor: session.teacher?.user?.name || 'Tutor',
       status,
     };

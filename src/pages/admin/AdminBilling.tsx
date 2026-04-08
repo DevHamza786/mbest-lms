@@ -326,7 +326,7 @@ export default function AdminBilling() {
                     {stats.revenue_change_percent_vs_last_month >= 0 ? '+' : ''}
                     {stats.revenue_change_percent_vs_last_month.toFixed(1)}%
                   </span>{' '}
-                  vs last month (paid revenue)
+                  vs last month (approved payments)
                 </p>
               </>
             )}
@@ -345,7 +345,7 @@ export default function AdminBilling() {
               <>
                 <div className="text-2xl font-bold">${stats.pending_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <p className="text-xs text-muted-foreground">
-                  {stats.pending_count} invoice{stats.pending_count === 1 ? '' : 's'}
+                  {stats.pending_count} pending payment{stats.pending_count === 1 ? '' : 's'}
                 </p>
               </>
             )}

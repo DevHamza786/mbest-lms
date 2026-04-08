@@ -28,7 +28,9 @@ const mapAdminSessionToSession = (adminSession: AdminSession | null | undefined)
       studentNames: [],
       subject: '',
       yearLevel: '',
-      location: 'online',
+      locationType: 'online',
+      locationDetail: '',
+      locationLabel: '',
       sessionType: '1:1',
       status: 'planned',
       lessonNote: '',
@@ -61,7 +63,10 @@ const mapAdminSessionToSession = (adminSession: AdminSession | null | undefined)
     studentNames: adminSession.students?.map(s => s.user?.name || 'Unknown Student') || [],
     subject: adminSession.subject,
     yearLevel: adminSession.year_level || '',
-    location: adminSession.location as 'online' | 'centre' | 'home',
+    locationType:
+      adminSession.location_type === 'online' ? 'online' : 'onsite',
+    locationDetail: (adminSession.location_detail ?? '').trim(),
+    locationLabel: adminSession.location ?? '',
     sessionType: adminSession.session_type as '1:1' | 'group',
     status: adminSession.status as Session['status'],
     lessonNote: (adminSession as any).lesson_note || '',
@@ -228,7 +233,7 @@ export default function AdminCalendar() {
       if (filters.teacherId && session.teacherId !== filters.teacherId) return false;
       if (filters.studentId && !session.studentIds.includes(filters.studentId)) return false;
       if (filters.subject && session.subject !== filters.subject) return false;
-      if (filters.location && session.location !== filters.location) return false;
+      if (filters.location && session.locationType !== filters.location) return false;
       if (filters.sessionType && session.sessionType !== filters.sessionType) return false;
       if (filters.status && session.status !== filters.status) return false;
       return true;
@@ -282,9 +287,10 @@ export default function AdminCalendar() {
           teacher_id: teacherId!,
           subject: formData.subject,
           year_level: formData.yearLevel || undefined,
-          location: formData.location,
+          location_type: formData.locationType,
+          location_detail: formData.locationDetail.trim(),
           session_type: formData.sessionType,
-          status: formData.status || 'scheduled',
+          status: formData.status || 'planned',
           student_ids: studentIds.length ? studentIds : undefined,
         });
         const mapped = mapAdminSessionToSession(created);
@@ -314,7 +320,8 @@ export default function AdminCalendar() {
       teacher_id: teacherId,
       subject: formData.subject,
       year_level: formData.yearLevel || undefined,
-      location: formData.location,
+      location_type: formData.locationType,
+      location_detail: formData.locationDetail.trim(),
       session_type: formData.sessionType,
       status: formData.status,
       student_ids: studentIds.length ? studentIds : undefined,
@@ -526,7 +533,12 @@ export default function AdminCalendar() {
                         </p>
                       </div>
                       <div className="text-right text-sm text-muted-foreground">
-                        <p className="capitalize">{session.location}</p>
+                        <p className="capitalize">
+                          {session.locationLabel ||
+                            (session.locationDetail
+                              ? `${session.locationType} · ${session.locationDetail}`
+                              : session.locationType)}
+                        </p>
                         <p>Year {session.yearLevel}</p>
                       </div>
                     </div>

@@ -21,6 +21,7 @@ import {
   PaginationNext, 
   PaginationPrevious 
 } from '@/components/ui/pagination';
+import { sessionIsOnline } from '@/lib/sessionLocation';
 
 interface AttendanceSession extends TutoringSession {
   attendance_summary?: {
@@ -685,8 +686,12 @@ export default function TutorAttendance() {
     }
   };
 
-  const getModeColor = (location: string) => {
-    return location === 'online'
+  const getModeColor = (location: string | TutoringSession) => {
+    const online =
+      typeof location === 'string'
+        ? location === 'online' || String(location).toLowerCase().includes('online')
+        : sessionIsOnline(location);
+    return online
       ? 'bg-purple-500/10 text-purple-700 dark:text-purple-400'
       : 'bg-orange-500/10 text-orange-700 dark:text-orange-400';
   };
@@ -888,7 +893,11 @@ export default function TutorAttendance() {
                               </div>
                               <div>
                                 <Label className="text-xs text-muted-foreground">Location</Label>
-                                <p className="font-medium capitalize">{selectedSessionForAttendance.location}</p>
+                                <p className="font-medium capitalize">
+                                  {selectedSessionForAttendance.location_detail?.trim() ||
+                                    selectedSessionForAttendance.location ||
+                                    selectedSessionForAttendance.location_type}
+                                </p>
                               </div>
                             </div>
                           </div>
@@ -1021,8 +1030,8 @@ export default function TutorAttendance() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={getModeColor(session.location)}>
-                              {session.location}
+                            <Badge className={getModeColor(session)}>
+                              {session.location_detail?.trim() || session.location || session.location_type}
                             </Badge>
                           </TableCell>
                           <TableCell>

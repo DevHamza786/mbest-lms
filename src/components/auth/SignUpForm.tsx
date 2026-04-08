@@ -41,17 +41,14 @@ export function SignUpForm() {
       // Get the user session and redirect to appropriate portal
       const session = useAuthStore.getState().session;
       if (session) {
-        // If parent, redirect to subscription page first
         if (session.role === 'parent') {
-          navigate('/parent/subscription', { replace: true });
+          navigate('/parent', { replace: true });
           toast({
             title: 'Account Created!',
-            description: 'Please select and pay for a subscription package to continue.',
+            description: `Welcome, ${session.name}! Complete subscription setup if prompted.`,
           });
         } else {
-          // For tutors, go to their dashboard
-          const portalRoot = getPortalRoot(session.role);
-          navigate(portalRoot, { replace: true });
+          navigate(getPortalRoot(session.role), { replace: true });
           toast({
             title: 'Welcome to MBEST!',
             description: `Account created successfully. Welcome, ${session.name}!`,

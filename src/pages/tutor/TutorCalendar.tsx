@@ -21,6 +21,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useSession } from '@/lib/store/authStore';
 import { generateTutorInvoicePDF } from '@/lib/utils/invoicePdf';
 import { tutorApi } from '@/lib/api';
+import { sessionIsOnline } from '@/lib/sessionLocation';
 
 interface LessonEvent {
   id: string;
@@ -123,9 +124,12 @@ export default function TutorCalendar() {
     else if (session.status === 'unavailable') status = 'unavailable';
     else if (session.status === 'rescheduled') status = 'rescheduled';
     
-    // Determine mode from location
-    const mode: 'online' | 'offline' = session.location === 'online' ? 'online' : 'offline';
-    
+    const mode: 'online' | 'offline' = sessionIsOnline(session) ? 'online' : 'offline';
+    const detail = (session.location_detail as string | undefined)?.trim();
+    const locationLabel = sessionIsOnline(session)
+      ? (detail || 'Online')
+      : (detail || 'Onsite');
+
     return {
       id: String(session.id),
       studentNames,
@@ -135,7 +139,7 @@ export default function TutorCalendar() {
       mode,
       status,
       color: session.color || getLessonColor({ status, time: formattedTime }),
-      location: session.location === 'online' ? 'Online' : session.location === 'home' ? 'Student\'s Home' : session.location === 'centre' ? 'Centre' : session.location,
+      location: locationLabel,
       subject: session.subject,
       lessonNote: session.lesson_note,
       topicsTaught: session.topics_taught,

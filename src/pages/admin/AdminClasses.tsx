@@ -35,9 +35,30 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { adminApi, AdminClass, AdminUser, AdminSession } from '@/lib/api/admin';
 import { Checkbox } from '@/components/ui/checkbox';
+
+/** Map DB class status to create/edit form values (draft | active | archived). */
+function dbClassStatusToForm(status: string): 'draft' | 'active' | 'archived' {
+  if (status === 'inactive') return 'draft';
+  if (status === 'completed') return 'archived';
+  return 'active';
+}
+
+/** API returns ISO datetimes; <input type="date"> only accepts yyyy-MM-dd. */
+function toDateInputValue(value?: string | null): string {
+  if (!value) return '';
+  const m = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${day}`;
+}
 
 export default function AdminClasses() {
   const { toast } = useToast();
@@ -46,6 +67,13 @@ export default function AdminClasses() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const [draftTutorFilter, setDraftTutorFilter] = useState<string>('all');
+  const [draftCategoryFilter, setDraftCategoryFilter] = useState('');
+  const [draftLevelFilter, setDraftLevelFilter] = useState<string>('all');
+  const [appliedTutorFilter, setAppliedTutorFilter] = useState<string>('all');
+  const [appliedCategoryFilter, setAppliedCategoryFilter] = useState('');
+  const [appliedLevelFilter, setAppliedLevelFilter] = useState<string>('all');
   const [selectedClass, setSelectedClass] = useState<AdminClass | null>(null);
   const [classDetails, setClassDetails] = useState<AdminClass | null>(null);
   const [classSessions, setClassSessions] = useState<AdminSession[]>([]);
@@ -54,6 +82,8 @@ export default function AdminClasses() {
   // Dialogs
   const [addClassDialogOpen, setAddClassDialogOpen] = useState(false);
   const [addSessionDialogOpen, setAddSessionDialogOpen] = useState(false);
+  /** When set, session modal was opened from a class — tutor/class/level/subject are fixed for that class. */
+  const [sessionClassContext, setSessionClassContext] = useState<AdminClass | null>(null);
   const [editClassDialogOpen, setEditClassDialogOpen] = useState(false);
   
   // Form states
@@ -80,7 +110,8 @@ export default function AdminClasses() {
     class_id: '',
     subject: '',
     year_level: '',
-    location: '',
+    location_type: 'onsite' as 'onsite' | 'online',
+    location_detail: '',
     session_type: 'group' as '1:1' | 'group',
     student_ids: [] as number[],
   });
@@ -112,6 +143,19 @@ export default function AdminClasses() {
 
       if (searchTerm) {
         params.search = searchTerm;
+      }
+
+      if (appliedTutorFilter !== 'all') {
+        params.tutor_id = parseInt(appliedTutorFilter, 10);
+      }
+
+      const cat = appliedCategoryFilter.trim();
+      if (cat) {
+        params.category = cat;
+      }
+
+      if (appliedLevelFilter !== 'all') {
+        params.level = appliedLevelFilter;
       }
 
       const result = await adminApi.getClasses(params);
@@ -193,7 +237,7 @@ export default function AdminClasses() {
   useEffect(() => {
     fetchClasses();
     fetchTutorsAndStudents();
-  }, [currentPage, statusFilter]);
+  }, [currentPage, statusFilter, appliedTutorFilter, appliedCategoryFilter, appliedLevelFilter]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -270,6 +314,7 @@ export default function AdminClasses() {
         tutor_id: '',
         start_date: '',
         end_date: '',
+        status: 'draft',
       });
       fetchClasses();
     } catch (err: any) {
@@ -283,8 +328,9 @@ export default function AdminClasses() {
 
   const handleCreateSession = async () => {
     try {
+      const locationText = sessionForm.location_detail.trim();
       if (!sessionForm.date || !sessionForm.start_time || !sessionForm.end_time || 
-          !sessionForm.teacher_id || !sessionForm.subject || !sessionForm.location) {
+          !sessionForm.teacher_id || !sessionForm.subject || !locationText) {
     toast({
           title: "Validation Error",
           description: "Please fill in all required fields",
@@ -326,7 +372,8 @@ export default function AdminClasses() {
         class_id: sessionForm.class_id ? parseInt(sessionForm.class_id) : undefined,
         subject: sessionForm.subject,
         year_level: sessionForm.year_level || undefined,
-        location: sessionForm.location,
+        location_type: sessionForm.location_type,
+        location_detail: locationText,
         session_type: sessionForm.session_type,
         student_ids: sessionForm.session_type === '1:1' && sessionForm.student_ids.length > 0 
           ? sessionForm.student_ids 
@@ -339,6 +386,7 @@ export default function AdminClasses() {
       });
       
       setAddSessionDialogOpen(false);
+      setSessionClassContext(null);
       setSessionForm({
         date: '',
         start_time: '',
@@ -347,7 +395,8 @@ export default function AdminClasses() {
         class_id: '',
         subject: '',
         year_level: '',
-        location: '',
+        location_type: 'onsite',
+        location_detail: '',
         session_type: 'group',
         student_ids: [],
       });
@@ -364,13 +413,22 @@ export default function AdminClasses() {
     }
   };
 
-  const handleDeleteClass = async (classId: number) => {
+  const handleDeleteClass = async (cls: AdminClass) => {
+    if (getEnrolledCount(cls) > 0) {
+      toast({
+        title: 'Cannot delete class',
+        description: 'This class has enrolled students. Remove all students before deleting.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!confirm('Are you sure you want to delete this class? This action cannot be undone.')) {
       return;
     }
 
     try {
-      await adminApi.deleteClass(classId);
+      await adminApi.deleteClass(cls.id);
       toast({
         title: "Success",
         description: "Class deleted successfully",
@@ -396,9 +454,10 @@ export default function AdminClasses() {
       capacity: cls.capacity?.toString() || '',
       credits: cls.credits?.toString() || '',
       duration: cls.duration || '',
-      tutor_id: cls.tutor_id.toString(),
-      start_date: cls.start_date || '',
-      end_date: cls.end_date || '',
+      tutor_id: cls.tutor?.user?.id?.toString() ?? '',
+      start_date: toDateInputValue(cls.start_date),
+      end_date: toDateInputValue(cls.end_date),
+      status: dbClassStatusToForm(cls.status),
     });
     setEditClassDialogOpen(true);
   };
@@ -461,6 +520,13 @@ export default function AdminClasses() {
     return cls.capacity || 0;
   };
 
+  const formatClassDate = (value?: string) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -486,7 +552,7 @@ export default function AdminClasses() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 mt-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="className">Class Name *</Label>
                   <Input 
@@ -531,7 +597,7 @@ export default function AdminClasses() {
                     value={classForm.level} 
                     onValueChange={(value) => setClassForm({ ...classForm, level: value })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -541,13 +607,13 @@ export default function AdminClasses() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 col-span-2">
                   <Label htmlFor="classStatus">Status</Label>
                   <Select
                     value={classForm.status || 'active'}
                     onValueChange={(value) => setClassForm({ ...classForm, status: value })}
                   >
-                    <SelectTrigger id="classStatus">
+                    <SelectTrigger id="classStatus" className="w-full">
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -580,10 +646,10 @@ export default function AdminClasses() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="classDuration">Duration</Label>
+                  <Label htmlFor="classDuration">No of class per week</Label>
                   <Input 
                     id="classDuration" 
-                    placeholder="e.g., 12 weeks"
+                    placeholder="e.g., 4"
                     value={classForm.duration}
                     onChange={(e) => setClassForm({ ...classForm, duration: e.target.value })}
                   />
@@ -595,7 +661,7 @@ export default function AdminClasses() {
                   value={classForm.tutor_id} 
                   onValueChange={(value) => setClassForm({ ...classForm, tutor_id: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select tutor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -641,7 +707,7 @@ export default function AdminClasses() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-4 items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
@@ -662,10 +728,112 @@ export default function AdminClasses() {
             <SelectItem value="completed">Completed</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline">
-          <Filter className="mr-2 h-4 w-4" />
-          More Filters
-        </Button>
+        <Popover
+          open={moreFiltersOpen}
+          onOpenChange={(open) => {
+            setMoreFiltersOpen(open);
+            if (open) {
+              setDraftTutorFilter(appliedTutorFilter);
+              setDraftCategoryFilter(appliedCategoryFilter);
+              setDraftLevelFilter(appliedLevelFilter);
+            }
+          }}
+        >
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" className="relative">
+              <Filter className="mr-2 h-4 w-4" />
+              More Filters
+              {(appliedTutorFilter !== 'all' ||
+                appliedCategoryFilter.trim() !== '' ||
+                appliedLevelFilter !== 'all') && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] text-primary-foreground">
+                  {(appliedTutorFilter !== 'all' ? 1 : 0) +
+                    (appliedCategoryFilter.trim() ? 1 : 0) +
+                    (appliedLevelFilter !== 'all' ? 1 : 0)}
+                </span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80" align="end">
+            <div className="space-y-4">
+              <p className="text-sm font-medium">Filter by class columns</p>
+              <div className="space-y-2">
+                <Label>Tutor</Label>
+                <Select value={draftTutorFilter} onValueChange={setDraftTutorFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All tutors" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All tutors</SelectItem>
+                    {tutors
+                      .filter((t): t is AdminUser & { tutor: { id: number } } => t.tutor != null)
+                      .map((t) => (
+                        <SelectItem key={t.id} value={String(t.tutor.id)}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="class-filter-category">Category</Label>
+                <Input
+                  id="class-filter-category"
+                  placeholder="e.g. Mathematics"
+                  value={draftCategoryFilter}
+                  onChange={(e) => setDraftCategoryFilter(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Matches category text on the class.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Level</Label>
+                <Select value={draftLevelFilter} onValueChange={setDraftLevelFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All levels" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All levels</SelectItem>
+                    <SelectItem value="Beginner">Beginner</SelectItem>
+                    <SelectItem value="Intermediate">Intermediate</SelectItem>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDraftTutorFilter('all');
+                    setDraftCategoryFilter('');
+                    setDraftLevelFilter('all');
+                    setAppliedTutorFilter('all');
+                    setAppliedCategoryFilter('');
+                    setAppliedLevelFilter('all');
+                    setCurrentPage(1);
+                    setMoreFiltersOpen(false);
+                  }}
+                >
+                  Clear
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setAppliedTutorFilter(draftTutorFilter);
+                    setAppliedCategoryFilter(draftCategoryFilter);
+                    setAppliedLevelFilter(draftLevelFilter);
+                    setCurrentPage(1);
+                    setMoreFiltersOpen(false);
+                  }}
+                >
+                  Apply filters
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Classes Grid */}
@@ -697,18 +865,13 @@ export default function AdminClasses() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => {
-                          setSelectedClass(cls);
-                          fetchClassDetails(cls.id);
-                        }}>
-                          View Details
-                    </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleEditClass(cls)}>
                           Edit Class
                     </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-destructive"
-                          onClick={() => handleDeleteClass(cls.id)}
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          disabled={getEnrolledCount(cls) > 0}
+                          onClick={() => handleDeleteClass(cls)}
                         >
                           Delete Class
                     </DropdownMenuItem>
@@ -728,6 +891,20 @@ export default function AdminClasses() {
                   <Users className="mr-2 h-4 w-4" />
                       {getEnrolledCount(cls)}/{getCapacity(cls)} students
                 </div>
+                {(cls.start_date || cls.end_date) && (
+                  <div className="flex items-start text-sm text-muted-foreground">
+                    <Calendar className="mr-2 h-4 w-4 shrink-0 mt-0.5" />
+                    <span>
+                      {cls.start_date && (
+                        <span>Starts {formatClassDate(cls.start_date)}</span>
+                      )}
+                      {cls.start_date && cls.end_date && <span className="mx-1">·</span>}
+                      {cls.end_date && (
+                        <span>Ends {formatClassDate(cls.end_date)}</span>
+                      )}
+                    </span>
+                  </div>
+                )}
                     {cls.schedules && cls.schedules.length > 0 && (
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Calendar className="mr-2 h-4 w-4" />
@@ -812,10 +989,10 @@ export default function AdminClasses() {
                                 </p>
                               )}
                               <div className="grid grid-cols-2 gap-4">
-                                {classDetails.duration && (
+                                {classDetails.credits && (
                                   <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Duration</p>
-                                    <p className="text-base font-semibold">{classDetails.duration}</p>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Class Hours</p>
+                                    <p className="text-base font-semibold">{classDetails.credits}</p>
                           </div>
                                 )}
                                 <div className="space-y-1">
@@ -1042,10 +1219,19 @@ export default function AdminClasses() {
                           variant="outline" 
                                   size="sm"
                                   onClick={() => {
+                                    setSessionClassContext(classDetails);
                                     setSessionForm({
-                                      ...sessionForm,
+                                      date: '',
+                                      start_time: '',
+                                      end_time: '',
+                                      teacher_id: classDetails.tutor?.user?.id?.toString() ?? '',
                                       class_id: classDetails.id.toString(),
                                       subject: classDetails.name,
+                                      year_level: classDetails.level ?? '',
+                                      location_type: 'onsite',
+                                      location_detail: '',
+                                      session_type: 'group',
+                                      student_ids: [],
                                     });
                                     setAddSessionDialogOpen(true);
                                   }}
@@ -1187,7 +1373,7 @@ export default function AdminClasses() {
                       </div>
                       ) : (
                         <div className="text-center py-12 text-muted-foreground">
-                          <p>Click "View Details" to load class information</p>
+                          <p>Use the button below to load full class information.</p>
                     </div>
                   )}
                 </SheetContent>
@@ -1200,15 +1386,51 @@ export default function AdminClasses() {
       )}
 
       {/* Create Session Dialog */}
-      <Dialog open={addSessionDialogOpen} onOpenChange={setAddSessionDialogOpen}>
+      <Dialog
+        open={addSessionDialogOpen}
+        onOpenChange={(open) => {
+          setAddSessionDialogOpen(open);
+          if (!open) {
+            setSessionClassContext(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Schedule New Session</DialogTitle>
+            <DialogTitle>
+              {sessionClassContext
+                ? `Schedule session — ${sessionClassContext.name}`
+                : 'Schedule New Session'}
+            </DialogTitle>
             <DialogDescription>
-              Create a new tutoring session for a class or individual students
+              {sessionClassContext
+                ? 'Set date, time, session type, and where this session takes place.'
+                : 'Create a new tutoring session for a class or individual students'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
+            {sessionClassContext && (
+              <div className="rounded-lg border bg-muted/40 p-4 space-y-2 text-sm">
+                <p className="font-semibold text-foreground">Class</p>
+                <dl className="grid gap-1.5">
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-muted-foreground shrink-0">Tutor</dt>
+                    <dd className="font-medium">{sessionClassContext.tutor?.user?.name ?? '—'}</dd>
+                  </div>
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-muted-foreground shrink-0">Class</dt>
+                    <dd className="font-medium">
+                      {sessionClassContext.name}{' '}
+                      <span className="text-muted-foreground font-normal">({sessionClassContext.code})</span>
+                    </dd>
+                  </div>
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-muted-foreground shrink-0">Level</dt>
+                    <dd className="font-medium">{sessionClassContext.level ?? '—'}</dd>
+                  </div>
+                </dl>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="sessionDate">Date *</Label>
@@ -1255,36 +1477,43 @@ export default function AdminClasses() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="sessionTutor">Tutor *</Label>
-              <Select 
-                value={sessionForm.teacher_id} 
-                onValueChange={(value) => setSessionForm({ ...sessionForm, teacher_id: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select tutor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tutors.map((tutor) => (
-                    <SelectItem key={tutor.id} value={tutor.id.toString()}>
-                      {tutor.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {sessionForm.session_type === 'group' && (
+            {(!sessionClassContext || !sessionForm.teacher_id) && (
+              <div className="space-y-2">
+                <Label htmlFor="sessionTutor">Tutor *</Label>
+                <Select 
+                  value={sessionForm.teacher_id || undefined} 
+                  onValueChange={(value) => setSessionForm({ ...sessionForm, teacher_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select tutor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tutors.map((tutor) => (
+                      <SelectItem key={tutor.id} value={tutor.id.toString()}>
+                        {tutor.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {sessionForm.session_type === 'group' && !sessionClassContext && (
               <div className="space-y-2">
                 <Label htmlFor="sessionClass">Class (Optional)</Label>
                 <Select 
-                  value={sessionForm.class_id} 
-                  onValueChange={(value) => setSessionForm({ ...sessionForm, class_id: value })}
+                  value={sessionForm.class_id || '__none__'} 
+                  onValueChange={(value) =>
+                    setSessionForm({
+                      ...sessionForm,
+                      class_id: value === '__none__' ? '' : value,
+                    })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select class (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="__none__">None</SelectItem>
                     {classes.map((cls) => (
                       <SelectItem key={cls.id} value={cls.id.toString()}>
                         {cls.name} ({cls.code})
@@ -1292,18 +1521,20 @@ export default function AdminClasses() {
                     ))}
                   </SelectContent>
                 </Select>
-        </div>
-      )}
-            <div className="space-y-2">
-              <Label htmlFor="sessionSubject">Subject *</Label>
-              <Input 
-                id="sessionSubject" 
-                placeholder="Enter subject"
-                value={sessionForm.subject}
-                onChange={(e) => setSessionForm({ ...sessionForm, subject: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+              </div>
+            )}
+            {!sessionClassContext && (
+              <div className="space-y-2">
+                <Label htmlFor="sessionSubject">Subject *</Label>
+                <Input 
+                  id="sessionSubject" 
+                  placeholder="Enter subject"
+                  value={sessionForm.subject}
+                  onChange={(e) => setSessionForm({ ...sessionForm, subject: e.target.value })}
+                />
+              </div>
+            )}
+            {!sessionClassContext && (
               <div className="space-y-2">
                 <Label htmlFor="sessionYearLevel">Year Level</Label>
                 <Input 
@@ -1313,14 +1544,46 @@ export default function AdminClasses() {
                   onChange={(e) => setSessionForm({ ...sessionForm, year_level: e.target.value })}
                 />
               </div>
+            )}
+            <div className="space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="sessionLocation">Location *</Label>
+                <Label htmlFor="sessionLocationType">Where *</Label>
+                <Select
+                  value={sessionForm.location_type}
+                  onValueChange={(value: 'onsite' | 'online') =>
+                    setSessionForm({ ...sessionForm, location_type: value })
+                  }
+                >
+                  <SelectTrigger id="sessionLocationType">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="onsite">Onsite</SelectItem>
+                    <SelectItem value="online">Online</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sessionLocationDetail">
+                  {sessionForm.location_type === 'online'
+                    ? 'Meeting link *'
+                    : 'Room, address, or Maps link *'}
+                </Label>
                 <Input 
-                  id="sessionLocation" 
-                  placeholder="e.g., Room 201, Online"
-                  value={sessionForm.location}
-                  onChange={(e) => setSessionForm({ ...sessionForm, location: e.target.value })}
+                  id="sessionLocationDetail" 
+                  placeholder={
+                    sessionForm.location_type === 'online'
+                      ? 'https://meet.google.com/... or Zoom link'
+                      : 'e.g. Room 201, or paste a Google Maps link'
+                  }
+                  value={sessionForm.location_detail}
+                  onChange={(e) => setSessionForm({ ...sessionForm, location_detail: e.target.value })}
                 />
+                <p className="text-xs text-muted-foreground">
+                  {sessionForm.location_type === 'online'
+                    ? 'Video call link (Meet, Zoom, Teams, etc.).'
+                    : 'Physical room or building — or a Google Maps URL for the address.'}
+                </p>
               </div>
             </div>
             {sessionForm.session_type === '1:1' && (

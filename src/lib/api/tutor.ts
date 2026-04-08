@@ -50,7 +50,10 @@ export interface TutoringSession {
   subject: string;
   year_level?: string;
   class_id?: number | null;
-  location: string;
+  location_type: 'online' | 'onsite';
+  location_detail?: string | null;
+  /** Virtual combined string from API. */
+  location?: string;
   session_type: string;
   status: string;
   lesson_note?: string;

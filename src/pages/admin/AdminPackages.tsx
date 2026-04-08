@@ -127,47 +127,61 @@ export default function AdminPackages() {
 
   const handleEdit = (pkg: Package) => {
     setSelectedPackage(pkg);
+    const rawIds = pkg.classes?.map((c) => c.id) || [];
+    const classIds = rawIds.map((id) => Number(id)).filter((id) => !Number.isNaN(id));
     setFormData({
       name: pkg.name,
       price: typeof pkg.price === 'string' ? parseFloat(pkg.price) : pkg.price,
       description: pkg.description || '',
       student_limit: pkg.student_limit,
-      class_ids: pkg.classes?.map(c => c.id) || [],
+      class_ids: classIds,
       allows_one_on_one: pkg.allows_one_on_one,
       bank_details: pkg.bank_details || '',
       is_active: pkg.is_active,
-      subject: '',
+      subject: 'all',
       billing_type: 'recurring',
       package_type: 'group',
     });
     setIsDialogOpen(true);
   };
 
+  const classMatchesSubjectFilter = (cls: AdminClass, subjectFilter: string | undefined) => {
+    if (!subjectFilter || subjectFilter === 'all') return true;
+    return (cls.category || '').toLowerCase() === subjectFilter.toLowerCase();
+  };
+
   const handleClassToggle = (classId: number) => {
-    const currentIds = formData.class_ids || [];
-    if (currentIds.includes(classId)) {
-      setFormData({
-        ...formData,
-        class_ids: currentIds.filter(id => id !== classId),
-      });
-    } else {
-      setFormData({
-        ...formData,
-        class_ids: [...currentIds, classId],
-      });
-    }
+    setFormData((prev) => {
+      const currentIds = prev.class_ids || [];
+      const has = currentIds.some((id) => Number(id) === classId);
+      const nextIds = has
+        ? currentIds.filter((id) => Number(id) !== classId)
+        : [...currentIds, classId];
+      return { ...prev, class_ids: nextIds };
+    });
   };
 
   const handleSubmit = async () => {
     try {
+      const classIds = (formData.class_ids || [])
+        .map((id) => Number(id))
+        .filter((id) => !Number.isNaN(id));
+
+      // Avoid sending "all" to backend as a real subject filter; subject is UI-only for class list.
+      const { subject: _subject, ...rest } = formData;
+      const cleanedFormData: CreatePackageData = {
+        ...rest,
+        class_ids: classIds,
+      };
+
       if (selectedPackage) {
-        await adminApi.updatePackage(selectedPackage.id, formData);
+        await adminApi.updatePackage(selectedPackage.id, cleanedFormData);
         toast({
           title: 'Success',
           description: 'Subscription plan updated successfully',
         });
       } else {
-        await adminApi.createPackage(formData);
+        await adminApi.createPackage(cleanedFormData);
         toast({
           title: 'Success',
           description: 'Subscription plan created successfully',
@@ -341,14 +355,26 @@ export default function AdminPackages() {
             <div className="grid gap-2">
               <Label htmlFor="subject">Subject</Label>
               <Select
-                value={formData.subject || ''}
-                onValueChange={(value) => setFormData({ ...formData, subject: value })}
+                value={formData.subject && formData.subject !== '' ? formData.subject : 'all'}
+                onValueChange={(value) => {
+                  setFormData((prev) => {
+                    const allowedIds = new Set(
+                      classes
+                        .filter((cls) => classMatchesSubjectFilter(cls, value))
+                        .map((cls) => Number(cls.id)),
+                    );
+                    const nextIds = (prev.class_ids || []).filter((id) =>
+                      allowedIds.has(Number(id)),
+                    );
+                    return { ...prev, subject: value, class_ids: nextIds };
+                  });
+                }}
               >
                 <SelectTrigger id="subject">
                   <SelectValue placeholder="Filter classes by subject/category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Subjects</SelectItem>
+                  <SelectItem value="all">All Subjects</SelectItem>
                   {Array.from(new Set(classes.map((c) => c.category).filter(Boolean))).map((cat) => (
                     <SelectItem key={cat as string} value={cat as string}>
                       {cat as string}
@@ -369,15 +395,13 @@ export default function AdminPackages() {
                 ) : (
                   <div className="space-y-2">
                     {classes
-                      .filter((cls) =>
-                        formData.subject ? (cls.category || '').toLowerCase() === formData.subject?.toLowerCase() : true
-                      )
+                      .filter((cls) => classMatchesSubjectFilter(cls, formData.subject))
                       .map((cls) => (
                       <div key={cls.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={`class-${cls.id}`}
-                          checked={(formData.class_ids || []).includes(cls.id)}
-                          onCheckedChange={() => handleClassToggle(cls.id)}
+                          checked={(formData.class_ids || []).map(Number).includes(Number(cls.id))}
+                          onCheckedChange={() => handleClassToggle(Number(cls.id))}
                         />
                         <Label
                           htmlFor={`class-${cls.id}`}

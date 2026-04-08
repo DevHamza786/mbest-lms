@@ -40,7 +40,6 @@ export function AddStudentModal({ isOpen, onClose, onSuccess }: AddStudentModalP
 
   const todayISO = getTodayISO();
   const normalizePhone = (value: string) => value.replace(/[\s-]/g, '');
-  const isValidAusPhone = (value: string) => /^\+61\d{9}$/.test(normalizePhone(value));
   const isValidGrade = (value: string) => /^Year (?:[1-9]|1[0-2])$/.test(value.trim());
   const isValidPassword = (value: string) =>
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/.test(value);
@@ -80,25 +79,6 @@ export function AddStudentModal({ isOpen, onClose, onSuccess }: AddStudentModalP
       toast({
         title: 'Validation Error',
         description: 'Email domain is invalid.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Validate Australian phone format (+61xxxxxxxxx). Allow empty values.
-    if (formData.phone && !isValidAusPhone(formData.phone)) {
-      toast({
-        title: 'Validation Error',
-        description: 'Phone must be in the format +61XXXXXXXXX.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (formData.emergency_contact_phone && !isValidAusPhone(formData.emergency_contact_phone)) {
-      toast({
-        title: 'Validation Error',
-        description: 'Emergency contact phone must be in the format +61XXXXXXXXX.',
         variant: 'destructive',
       });
       return;
@@ -252,7 +232,7 @@ export function AddStudentModal({ isOpen, onClose, onSuccess }: AddStudentModalP
               <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
-                type="tel"
+                type="text"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="Enter phone number"
@@ -290,7 +270,7 @@ export function AddStudentModal({ isOpen, onClose, onSuccess }: AddStudentModalP
               <Label htmlFor="emergency_contact_phone">Emergency Contact Phone</Label>
               <Input
                 id="emergency_contact_phone"
-                type="tel"
+                type="text"
                 value={formData.emergency_contact_phone}
                 onChange={(e) => setFormData({ ...formData, emergency_contact_phone: e.target.value })}
                 placeholder="Emergency contact phone"

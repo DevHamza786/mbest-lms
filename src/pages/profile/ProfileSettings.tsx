@@ -211,28 +211,26 @@ export default function ProfileSettings() {
           setAvatarPreview(null);
         }
         
-        // Update session store with latest profile data (including name if changed)
+        // Update session store with latest profile data
         const { useAuthStore } = await import('@/lib/store/authStore');
         const currentSession = useAuthStore.getState().session;
         if (currentSession) {
-          useAuthStore.setState({
-            session: {
-              ...currentSession,
-              name: profile.name || currentSession.name,
-              email: profile.email || currentSession.email,
-              avatar: profile.avatar || currentSession.avatar,
-            },
-          });
-          // Also update in localStorage
+          const nextSession = {
+            ...currentSession,
+            name: profile.name || currentSession.name,
+            email: profile.email || currentSession.email,
+            avatar: profile.avatar || currentSession.avatar,
+          };
+          useAuthStore.setState({ session: nextSession });
           const { getStorageItem, setStorageItem, STORAGE_KEYS } = await import('@/lib/utils/storage');
           const stored = getStorageItem(STORAGE_KEYS.SESSION);
           if (stored && typeof stored === 'object') {
             const storedObj = stored as any;
             setStorageItem(STORAGE_KEYS.SESSION, {
               ...storedObj,
-              name: profile.name || storedObj.name,
-              email: profile.email || storedObj.email,
-              avatar: profile.avatar || storedObj.avatar,
+              name: nextSession.name,
+              email: nextSession.email,
+              avatar: nextSession.avatar,
             });
           }
         }
@@ -469,37 +467,37 @@ export default function ProfileSettings() {
               : prev.max_students_per_group,
         }));
 
-        // Update avatar preview and session
-        if (refreshedProfile.avatar) {
-          // Convert relative path to full URL
-          const avatarUrl = refreshedProfile.avatar.startsWith('http') 
-            ? refreshedProfile.avatar 
-            : refreshedProfile.avatar.startsWith('/')
-            ? `${import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000'}${refreshedProfile.avatar}`
-            : `${import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000'}/storage/${refreshedProfile.avatar}`;
-          setAvatarPreview(avatarUrl);
-          
-          // Update session store
-          const { useAuthStore } = await import('@/lib/store/authStore');
-          const currentSession = useAuthStore.getState().session;
-          if (currentSession) {
-            useAuthStore.setState({
-              session: {
-                ...currentSession,
-                avatar: refreshedProfile.avatar,
-              },
+        // Sync session and avatar preview
+        const { useAuthStore } = await import('@/lib/store/authStore');
+        const currentSessionAfterSave = useAuthStore.getState().session;
+        if (currentSessionAfterSave) {
+          const nextSession = {
+            ...currentSessionAfterSave,
+            name: refreshedProfile.name || currentSessionAfterSave.name,
+            email: refreshedProfile.email || currentSessionAfterSave.email,
+            avatar: refreshedProfile.avatar || currentSessionAfterSave.avatar,
+          };
+          useAuthStore.setState({ session: nextSession });
+          const { getStorageItem, setStorageItem, STORAGE_KEYS } = await import('@/lib/utils/storage');
+          const storedAfterSave = getStorageItem(STORAGE_KEYS.SESSION);
+          if (storedAfterSave && typeof storedAfterSave === 'object') {
+            const storedObj = storedAfterSave as any;
+            setStorageItem(STORAGE_KEYS.SESSION, {
+              ...storedObj,
+              name: nextSession.name,
+              email: nextSession.email,
+              avatar: nextSession.avatar,
             });
-            // Update in localStorage
-            const { getStorageItem, setStorageItem, STORAGE_KEYS } = await import('@/lib/utils/storage');
-            const stored = getStorageItem(STORAGE_KEYS.SESSION);
-            if (stored && typeof stored === 'object') {
-              const storedObj = stored as any;
-              setStorageItem(STORAGE_KEYS.SESSION, {
-                ...storedObj,
-                avatar: refreshedProfile.avatar,
-              });
-            }
           }
+        }
+
+        if (refreshedProfile.avatar) {
+          const avatarUrl = refreshedProfile.avatar.startsWith('http')
+            ? refreshedProfile.avatar
+            : refreshedProfile.avatar.startsWith('/')
+              ? `${import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000'}${refreshedProfile.avatar}`
+              : `${import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000'}/storage/${refreshedProfile.avatar}`;
+          setAvatarPreview(avatarUrl);
         } else {
           setAvatarPreview(null);
         }

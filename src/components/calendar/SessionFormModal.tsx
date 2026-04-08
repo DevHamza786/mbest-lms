@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Session, SessionFormData, SessionLocation, SessionType, SessionStatus } from '@/lib/types/session';
+import { Session, SessionFormData, SessionLocationMode, SessionType, SessionStatus } from '@/lib/types/session';
 import { detectSessionConflicts, calculateDuration } from '@/lib/utils/sessionUtils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -44,7 +44,8 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
     studentIds: [],
     subject: '',
     yearLevel: '', // kept for now but no longer required
-    location: 'online',
+    locationType: 'online',
+    locationDetail: '',
     sessionType: '1:1',
     status: 'planned',
     occurrences: 1,
@@ -64,7 +65,8 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
         studentIds: session.studentIds,
         subject: session.subject,
         yearLevel: session.yearLevel,
-        location: session.location,
+        locationType: session.locationType,
+        locationDetail: session.locationDetail,
         sessionType: session.sessionType,
         status: session.status,
         occurrences: 1,
@@ -80,7 +82,8 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
         studentIds: [],
         subject: '',
         yearLevel: '',
-        location: 'online',
+        locationType: 'online',
+        locationDetail: '',
         sessionType: '1:1',
         status: 'planned',
         occurrences: 1,
@@ -112,6 +115,9 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
     if (!formData.teacherId) errors.push('Teacher is required');
     if (formData.studentIds.length === 0) errors.push('At least one student is required');
     if (!formData.subject) errors.push('Session title / subject is required');
+    if (!formData.locationDetail?.trim()) {
+      errors.push('Add a meeting link or onsite address (location detail)');
+    }
 
     // Validate time range
     if (formData.startTime && formData.endTime) {
@@ -297,18 +303,20 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
             {/* Year level now inherited from class, so we omit it here */}
           </div>
 
-          {/* Location and Type */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Where */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <Label htmlFor="location">Location *</Label>
-              <Select value={formData.location} onValueChange={(value: SessionLocation) => setFormData({ ...formData, location: value })}>
-                <SelectTrigger id="location">
+              <Label htmlFor="locationType">Where *</Label>
+              <Select
+                value={formData.locationType}
+                onValueChange={(value: SessionLocationMode) => setFormData({ ...formData, locationType: value })}
+              >
+                <SelectTrigger id="locationType">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="online">Online</SelectItem>
-                  <SelectItem value="centre">Centre</SelectItem>
-                  <SelectItem value="home">Home</SelectItem>
+                  <SelectItem value="onsite">Onsite</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -337,6 +345,21 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
                 }
               />
             </div>
+          </div>
+          <div>
+            <Label htmlFor="locationDetail">
+              {formData.locationType === 'online' ? 'Meeting link *' : 'Room, address, or Maps link *'}
+            </Label>
+            <Input
+              id="locationDetail"
+              placeholder={
+                formData.locationType === 'online'
+                  ? 'https://meet.google.com/...'
+                  : 'e.g. Room 201 or Google Maps URL'
+              }
+              value={formData.locationDetail}
+              onChange={(e) => setFormData({ ...formData, locationDetail: e.target.value })}
+            />
           </div>
 
           {/* Status */}

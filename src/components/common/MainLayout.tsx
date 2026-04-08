@@ -9,11 +9,11 @@ interface MainLayoutProps {
 export function MainLayout({ children }: MainLayoutProps) {
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex h-svh min-h-0 w-full flex-1 overflow-hidden">
         <AppSidebar />
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <Header />
-          <main className="flex-1 overflow-auto bg-background">
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background">
             {children}
           </main>
         </div>

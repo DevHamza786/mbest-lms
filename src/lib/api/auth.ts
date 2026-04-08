@@ -73,13 +73,14 @@ export const authApi = {
     if (response.success && response.data) {
       // Handle nested structure: response.data.data or response.data.user or response.data
       const userData = response.data.data || response.data.user || response.data;
-      return {
+      const session = {
         id: String(userData.id),
         name: userData.name,
         email: userData.email,
         role: userData.role,
         avatar: userData.avatar || null,
-      };
+      } as Session;
+      return session;
     }
 
     throw new Error(response.message || 'Failed to get user info');

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { tutorApi } from '@/lib/api/tutor';
 import { useSession } from '@/lib/store/authStore';
 
@@ -10,9 +11,16 @@ export function usePendingAssignmentsCount() {
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const session = useSession();
+  const location = useLocation();
 
   useEffect(() => {
     if (!session?.id || session.role !== 'tutor') {
+      setPendingCount(0);
+      setLoading(false);
+      return;
+    }
+
+    if (location.pathname.startsWith('/tutor/availability')) {
       setPendingCount(0);
       setLoading(false);
       return;
@@ -33,7 +41,7 @@ export function usePendingAssignmentsCount() {
         const count = response.statistics?.pending_grading || 0;
         setPendingCount(count);
         setLoading(false);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Failed to fetch pending assignments count:', error);
         if (mounted) {
           setPendingCount(0);
@@ -56,7 +64,7 @@ export function usePendingAssignmentsCount() {
       mounted = false;
       clearInterval(pollInterval);
     };
-  }, [session?.id, session?.role]);
+  }, [session?.id, session?.role, location.pathname]);
 
   return { pendingCount, loading };
 }

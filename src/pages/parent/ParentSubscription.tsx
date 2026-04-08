@@ -283,12 +283,15 @@ const ParentSubscription = () => {
           <h1 className="text-3xl font-bold mb-2">Select Subscription plan</h1>
           <p className="text-muted-foreground">Choose a plan that fits your needs</p>
           {subscription?.status === 'active' && subscription.package && (
-            <div className="mt-4 p-4 rounded-lg border bg-muted/30">
+            <div className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-3">
               <div className="text-sm font-medium">Current active plan</div>
               <div className="text-lg font-semibold">{subscription.package.name}</div>
               <div className="text-sm text-muted-foreground">
                 Students: {subscription.current_student_count} / {subscription.limits?.student_limit || 0}
               </div>
+              <Button onClick={() => navigate('/parent')}>
+                Continue to dashboard
+              </Button>
             </div>
           )}
         </div>

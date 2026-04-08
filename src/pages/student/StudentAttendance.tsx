@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { studentApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { sessionIsOnline } from '@/lib/sessionLocation';
 
 export default function StudentAttendance() {
   const { toast } = useToast();
@@ -188,7 +189,7 @@ export default function StudentAttendance() {
                   </TableHeader>
                   <TableBody>
                     {attendanceRecords.map((record) => {
-                      const mode = record.location === 'online' ? 'online' : 'offline';
+                      const mode = sessionIsOnline(record as any) ? 'online' : 'offline';
                       const status = record.attendance_status || 'absent';
                       return (
                         <TableRow key={record.id}>
