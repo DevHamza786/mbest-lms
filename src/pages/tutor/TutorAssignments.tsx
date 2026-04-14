@@ -153,14 +153,6 @@ export default function TutorAssignments() {
       return;
     }
 
-    if (isFutureDueDate(newAssignment.due_date)) {
-      toast({
-        title: "Validation Error",
-        description: "Due date cannot be in the future.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     try {
       await tutorApi.createAssignment({
@@ -220,14 +212,6 @@ export default function TutorAssignments() {
       return;
     }
 
-    if (isFutureDueDate(newAssignment.due_date)) {
-      toast({
-        title: "Validation Error",
-        description: "Due date cannot be in the future.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     try {
       await tutorApi.updateAssignment(editingAssignment.id, {
@@ -445,7 +429,6 @@ export default function TutorAssignments() {
                     type="date"
                     value={newAssignment.due_date}
                     onChange={(e) => setNewAssignment(prev => ({ ...prev, due_date: e.target.value }))}
-                  max={todayISO}
                   />
                 </div>
                 <div className="space-y-2">
@@ -812,7 +795,6 @@ export default function TutorAssignments() {
                   type="date"
                   value={newAssignment.due_date}
                   onChange={(e) => setNewAssignment(prev => ({ ...prev, due_date: e.target.value }))}
-                  max={todayISO}
                 />
               </div>
               <div className="space-y-2">

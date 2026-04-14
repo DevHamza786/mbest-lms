@@ -99,7 +99,7 @@ export default function ParentAssignments() {
           return {
             id: String(a.id),
             title: a.title,
-            subject: (a.class && a.class.category) ? a.class.category : (a.class && a.class.name ? a.class.name : 'Unknown'),
+            subject: (a.class_model && a.class_model.name) ? a.class_model.name : 'Unknown',
             dueDate: a.due_date,
             status,
             grade: submission?.grade,

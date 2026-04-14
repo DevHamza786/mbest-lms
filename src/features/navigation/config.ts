@@ -1,12 +1,13 @@
-import { 
-  LayoutDashboard, 
-  Calendar, 
-  Library, 
-  CreditCard, 
-  MessageSquare, 
-  Users, 
-  FileText, 
-  BookOpen, 
+import {
+  LayoutDashboard,
+  Calendar,
+  CalendarDays,
+  Library,
+  CreditCard,
+  MessageSquare,
+  Users,
+  FileText,
+  BookOpen,
   PenTool,
   GraduationCap,
   Bell,
@@ -315,14 +316,20 @@ export const navByRole: Record<UserRole, NavSection[]> = {
           label: 'Dashboard',
           description: "Your child's progress"
         },
+        {
+          href: '/parent/calendar',
+          icon: CalendarDays,
+          label: 'Calendar',
+          description: 'Session schedule view'
+        },
       ]
     },
     {
       title: 'Academic',
       items: [
-        { 
-          href: '/parent/classes', 
-          icon: Calendar, 
+        {
+          href: '/parent/classes',
+          icon: Calendar,
           label: 'Classes',
           description: "Child's enrolled courses"
         },

@@ -56,15 +56,16 @@ export default function ParentClasses() {
         
         // Map API response to store format
         const mappedClasses = classesData.map(cls => {
-          // Format schedules day-wise
+          // Format schedules - handle both ClassSchedule (day_of_week) and TutoringSession (date) formats
           const scheduleMap: { [key: string]: string[] } = {};
-          cls.schedules.forEach(s => {
-            if (!scheduleMap[s.day_of_week]) {
-              scheduleMap[s.day_of_week] = [];
+          cls.schedules?.forEach((s: any) => {
+            const day = s.day_of_week || (s.date ? new Date(s.date).toLocaleDateString('en-US', { weekday: 'long' }) : 'TBD');
+            if (!scheduleMap[day]) {
+              scheduleMap[day] = [];
             }
-            scheduleMap[s.day_of_week].push(`${s.start_time}-${s.end_time}`);
+            scheduleMap[day].push(`${s.start_time}-${s.end_time}`);
           });
-          
+
           // Create formatted schedule string with day-wise times
           const scheduleString = Object.keys(scheduleMap)
             .map(day => {
@@ -78,6 +79,7 @@ export default function ParentClasses() {
             name: cls.name,
             tutor: cls.tutor.user.name,
             schedule: scheduleString || 'No schedule',
+            scheduleCount: cls.schedules?.length || 0,
             scheduleData: cls.schedules, // Keep original for detailed view
             room: cls.schedules[0]?.room,
             meetingLink: cls.schedules[0]?.meeting_link,
@@ -85,7 +87,6 @@ export default function ParentClasses() {
             isLive: false,
           };
         });
-        
         setClasses(mappedClasses);
       } catch (error) {
         console.error('Failed to load classes:', error);
@@ -204,7 +205,9 @@ export default function ParentClasses() {
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{classes?.length || 0}</div>
+            <div className="text-2xl font-bold">{classes?.length || 0}
+              
+            </div>
             <p className="text-xs text-muted-foreground">Enrolled this semester</p>
           </CardContent>
         </Card>
@@ -224,14 +227,14 @@ export default function ParentClasses() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Live Now</CardTitle>
-            <Eye className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Sessions</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {classes?.filter(c => c.isLive).length || 0}
+              {classes?.reduce((total, cls) => total + (cls.scheduleCount || 0), 0) || 0}
             </div>
-            <p className="text-xs text-muted-foreground">Classes in session</p>
+            <p className="text-xs text-muted-foreground">Across all classes</p>
           </CardContent>
         </Card>
       </div>
@@ -316,9 +319,7 @@ export default function ParentClasses() {
                       <div className="flex items-start gap-2">
                         <Clock className="h-4 w-4 mt-0.5 group-hover:text-primary transition-colors duration-300 flex-shrink-0" />
                         <div className="flex-1 space-y-1">
-                          {classItem.schedule.split(' | ').map((scheduleLine, idx) => (
-                            <div key={idx}>{scheduleLine}</div>
-                          ))}
+                          Total Schedule Session: {classItem.scheduleCount}
                         </div>
                       </div>
                     </div>

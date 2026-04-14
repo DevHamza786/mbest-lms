@@ -94,7 +94,7 @@ export default function TutorAttendanceRecords() {
         studentName: record.student_name || 'Unknown',
         status: record.attendance_status === 'excused' ? 'absent' : (record.attendance_status || 'absent') as 'present' | 'absent' | 'late',
         time: record.start_time ? format(new Date(`2000-01-01T${record.start_time}`), 'hh:mm a') : '-',
-        notes: undefined, // API doesn't return notes in attendance records
+        notes: record.lesson_note || record.topics_taught || undefined,
       }));
 
       setAllRecords(mappedRecords);

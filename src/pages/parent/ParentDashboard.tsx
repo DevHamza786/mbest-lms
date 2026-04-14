@@ -10,7 +10,6 @@ import { parentApi } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { AddStudentModal } from '@/components/modals/AddStudentModal';
 import { Plus } from 'lucide-react';
-import { ParentClassesCalendar } from '@/components/parent/ParentClassesCalendar';
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
@@ -21,6 +20,7 @@ const ParentDashboard = () => {
     stats,
     classes,
     grades,
+    upcomingSessions,
     assignments,
     isLoading,
     unreadMessages,
@@ -32,6 +32,7 @@ const ParentDashboard = () => {
     setStats,
     setClasses,
     setGrades,
+    setUpcomingSessions,
     setAssignments,
     setLoading,
   } = useParentStore();
@@ -190,6 +191,7 @@ const ParentDashboard = () => {
           name: cls.name,
           tutor: cls.tutor?.user?.name || 'Unknown',
           schedule: (cls.schedules || []).map(s => `${s.day_of_week} ${s.start_time}-${s.end_time}`).join(', '),
+          scheduleCount: cls.schedules?.length || 0,
           scheduleData: cls.schedules,
           room: cls.schedules?.[0]?.room,
           meetingLink: cls.schedules?.[0]?.meeting_link,
@@ -206,7 +208,30 @@ const ParentDashboard = () => {
           date: g.date,
           category: g.category || '',
         })));
-        
+
+        // Load upcoming sessions from dashboard
+        try {
+          const dashboardData = await parentApi.getDashboard();
+          if (dashboardData.upcoming_sessions && Array.isArray(dashboardData.upcoming_sessions)) {
+            setUpcomingSessions(dashboardData.upcoming_sessions.map((s: any) => ({
+              id: String(s.id),
+              class_id: String(s.class_id),
+              class_name: s.class_name,
+              class_code: s.class_code,
+              date: s.date,
+              day_name: s.day_name,
+              start_time: s.start_time,
+              end_time: s.end_time,
+              location: s.location,
+              subject: s.subject,
+              teacher_name: s.teacher_name,
+              view_url: s.view_url,
+            })));
+          }
+        } catch (err) {
+          console.error('Failed to load upcoming sessions:', err);
+        }
+
         setAssignments(assignmentsArray.map((a: any) => {
           const submission = a.submissions?.[0];
           let status: 'due' | 'submitted' | 'late' | 'graded' = 'due';
@@ -234,7 +259,7 @@ const ParentDashboard = () => {
     };
 
     loadChildData();
-  }, [activeChild?.id, setStats, setClasses, setGrades, setAssignments, setLoading]);
+  }, [activeChild?.id, setStats, setClasses, setGrades, setUpcomingSessions, setAssignments, setLoading]);
 
   const getGradeColor = (grade: number) => {
     if (grade >= 90) return 'bg-green-500';
@@ -459,12 +484,12 @@ const ParentDashboard = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Assignments</CardTitle>
+            <CardTitle className="text-sm font-medium">Unsubmitted Assignments</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.activeAssignments || 0}</div>
-            <p className="text-xs text-muted-foreground">Currently due</p>
+            <p className="text-xs text-muted-foreground">Pending submission</p>
           </CardContent>
         </Card>
 
@@ -487,99 +512,6 @@ const ParentDashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">{stats?.upcomingTests || 0}</div>
             <p className="text-xs text-muted-foreground">Next 2 weeks</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Recent Grades */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Grades</CardTitle>
-            <CardDescription>Latest assignment and test results</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {recentGrades.map((grade) => (
-              <div key={grade.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-1">
-                  <h4 className="font-semibold">{grade.assignment}</h4>
-                  <p className="text-sm text-muted-foreground">{grade.subject}</p>
-                  <p className="text-xs text-muted-foreground">Submitted: {grade.date}</p>
-                </div>
-                <div className="text-right space-y-1">
-                  <div className="text-2xl font-bold">{grade.grade}%</div>
-                  <Badge 
-                    variant="outline" 
-                    className={`${getGradeColor(grade.grade)} text-white border-0`}
-                  >
-                    {grade.status.replace('-', ' ')}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Today's Classes */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Today's Schedule</CardTitle>
-            <CardDescription>Classes scheduled for today</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {todaysClasses.length > 0 ? (
-              todaysClasses.map((classItem) => (
-                <div key={classItem.id} className="flex items-start justify-between p-4 border rounded-lg">
-                  <div className="space-y-2 flex-1">
-                    <h4 className="font-semibold">{classItem.name}</h4>
-                    <div className="space-y-1">
-                      {(((classItem as any).scheduleData as Array<any> | undefined) || [])
-                        .filter(
-                          (s) =>
-                            normalizeDayOfWeekToIndex(s?.day_of_week) === todayIdx
-                        )
-                        .map((s, idx) => {
-                          const label =
-                            s?.start_time && s?.end_time
-                              ? `${s.start_time}-${s.end_time}`
-                              : s?.start_time || '';
-                          return (
-                            <div
-                              key={`${idx}-${label}`}
-                              className="flex items-center text-sm text-muted-foreground"
-                            >
-                              <Clock className="mr-1 h-3 w-3 flex-shrink-0" />
-                              <span>{label}</span>
-                            </div>
-                          );
-                        })}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      with {classItem.tutor}
-                    </p>
-                    {classItem.room && (
-                      <p className="text-xs text-muted-foreground">Room: {classItem.room}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    {classItem.isLive && (
-                      <Badge variant="destructive" className="animate-pulse">
-                        Live
-                      </Badge>
-                    )}
-                    <Button size="sm" variant="outline" disabled>
-                      <Eye className="mr-2 h-4 w-4" />
-                      View Only (Parent Access)
-                    </Button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No classes scheduled for today</p>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
@@ -617,9 +549,78 @@ const ParentDashboard = () => {
           </div>
         </CardContent>
       </Card>
-      <div className="mt-6">
-        <ParentClassesCalendar classes={classes || []} />
-      </div>
+      
+      {/* Recent Grades */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Grades</CardTitle>
+          <CardDescription>Latest assignment and test results</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {recentGrades.map((grade) => (
+            <div key={grade.id} className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="space-y-1">
+                <h4 className="font-semibold">{grade.assignment}</h4>
+                <p className="text-sm text-muted-foreground">{grade.subject}</p>
+                <p className="text-xs text-muted-foreground">Submitted: {grade.date}</p>
+              </div>
+              <div className="text-right space-y-1">
+                <div className="text-2xl font-bold">{grade.grade}%</div>
+                <Badge 
+                  variant="outline" 
+                  className={`${getGradeColor(grade.grade)} text-white border-0`}
+                >
+                  {grade.status.replace('-', ' ')}
+                </Badge>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Upcoming Sessions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Upcoming Sessions</CardTitle>
+          <CardDescription>Next scheduled classes</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {upcomingSessions && upcomingSessions.length > 0 ? (
+            upcomingSessions.map((session) => (
+              <div key={session.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <h4 className="font-semibold">{session.class_name}</h4>
+                  <p className="text-sm text-muted-foreground">{session.subject}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {session.day_name}, {formatDateOnly(session.date)} | {session.start_time} - {session.end_time}
+                  </p>
+                  {session.teacher_name && (
+                    <p className="text-xs text-muted-foreground">Teacher: {session.teacher_name}</p>
+                  )}
+                </div>
+                <div className="text-right space-y-2">
+                  {session.location && (
+                    <Badge variant="outline">{session.location}</Badge>
+                  )}
+                  {session.view_url && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(session.view_url)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      View
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-muted-foreground text-center py-4">No upcoming sessions found</p>
+          )}
+        </CardContent>
+      </Card>
+
         </>
       )}
       <AddStudentModal

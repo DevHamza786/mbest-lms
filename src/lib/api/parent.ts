@@ -344,6 +344,21 @@ export const parentApi = {
     return response.data.data;
   },
 
+  async getPayments(params?: {
+    status?: string;
+    per_page?: number;
+    page?: number;
+  }): Promise<any[]> {
+    const response = await apiClient.get<{ data: any[] }>('/parent/billing/payments', params);
+    return response.data?.data || [];
+  },
+
+  async getPayment(id: number): Promise<any> {
+    const response = await apiClient.get<{ data: any }>(`/parent/billing/payments/${id}`);
+    if (!response.data) throw new Error('Payment not found');
+    return response.data.data;
+  },
+
   async downloadInvoicePdf(id: number): Promise<Blob> {
     const token = apiClient.getToken();
     const baseURL = apiClient.getBaseURL();
@@ -352,7 +367,7 @@ export const parentApi = {
         Authorization: `Bearer ${token}`,
       },
     });
-    
+
     // If response is not OK, handle error
     if (!response.ok) {
       let errorMessage = 'PDF download is not available. Please contact support.';

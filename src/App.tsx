@@ -67,6 +67,7 @@ import TutorQuestions from "./pages/tutor/TutorQuestions";
 // Parent pages
 import ParentDashboard from "./pages/parent/ParentDashboard";
 import ParentClasses from "./pages/parent/ParentClasses";
+import ParentCalendar from "./pages/parent/ParentCalendar";
 import ParentAssignments from "./pages/parent/ParentAssignments";
 import ParentGrades from "./pages/parent/ParentGrades";
 import ParentResources from "./pages/parent/ParentResources";
@@ -347,6 +348,11 @@ const App = () => (
                         <Route index element={
                           <ProtectedRoute allowedRoles={['parent']}>
                             <ParentDashboard />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="calendar" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentCalendar />
                           </ProtectedRoute>
                         } />
                         <Route path="classes" element={

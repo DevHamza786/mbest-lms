@@ -55,9 +55,18 @@ interface ClassDetailsModalProps {
   classDetails: ClassDetails | null;
 }
 
+const statusStyles = {
+  planned: "bg-blue-100 text-blue-700 border-blue-200",
+  completed: "bg-green-100 text-green-700 border-green-200",
+  cancelled: "bg-red-100 text-red-700 border-red-200",
+  "no-show": "bg-orange-100 text-orange-700 border-orange-200",
+  rescheduled: "bg-purple-100 text-purple-700 border-purple-200",
+  unavailable: "bg-gray-100 text-gray-700 border-gray-200",
+};
+
 export function ClassDetailsModal({ open, onOpenChange, classDetails }: ClassDetailsModalProps) {
   if (!classDetails) return null;
-
+  // console.log(classDetails)
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
@@ -100,22 +109,14 @@ export function ClassDetailsModal({ open, onOpenChange, classDetails }: ClassDet
           <DialogDescription>
             Class details and information for {classDetails.name}
           </DialogDescription>
+          <DialogDescription>
+            <b>Tutor Name:</b> {classDetails.tutor}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Instructor
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-semibold">{classDetails.tutor}</p>
-              </CardContent>
-            </Card>
 
             <Card>
               <CardHeader className="pb-3">
@@ -124,10 +125,48 @@ export function ClassDetailsModal({ open, onOpenChange, classDetails }: ClassDet
                   Schedule
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="font-semibold">{classDetails.schedule}</p>
-                {classDetails.duration && (
-                  <p className="text-sm text-muted-foreground">Duration: {classDetails.duration}</p>
+              <CardContent className="space-y-4">
+                {classDetails?.scheduleData && classDetails.scheduleData.length > 0 ? (
+                  classDetails.scheduleData.map((item, index) => (
+                    <div key={item.id || index} className={index !== 0 ? "pt-3 border-t" : ""}>
+                      {/* Session/Subject Display */}
+                      {item.subject && (
+                        <p className="text-xs font-medium text-primary uppercase tracking-wider mb-1">
+                          Session: {item.subject}
+                        </p>
+                      )}
+                      
+                      {/* Date Formatting */}
+                      <p className="font-semibold text-sm text-foreground">
+                        {new Date(item.date).toLocaleDateString('en-GB', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                        })}
+                      </p>
+                      
+                      {/* Time Display Badge */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="bg-secondary text-secondary-foreground px-2 py-0.5 rounded text-xs font-mono">
+                          {item.start_time.substring(0, 5)} — {item.end_time.substring(0, 5)}
+                        </span>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`
+                          px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border
+                          ${statusStyles[item.status?.toLowerCase()] || "bg-secondary text-secondary-foreground border-transparent"}
+                        `}>
+                          {item.status || 'Unknown'}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-4 text-center">
+                    <p className="text-sm text-muted-foreground italic">No upcoming sessions scheduled.</p>
+                  </div>
                 )}
               </CardContent>
             </Card>

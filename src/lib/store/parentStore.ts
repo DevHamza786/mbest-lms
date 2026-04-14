@@ -22,6 +22,7 @@ export interface ParentClass {
   name: string;
   tutor: string;
   schedule: string;
+  scheduleCount?: number;
   scheduleData?: any; // Original schedule data for detailed view
   room?: string;
   meetingLink?: string;
@@ -49,6 +50,21 @@ export interface ParentGrade {
   maxGrade: number;
   date: string;
   category: string;
+}
+
+export interface ParentUpcomingSession {
+  id: string;
+  class_id: string;
+  class_name: string;
+  class_code: string;
+  date: string;
+  day_name: string;
+  start_time: string;
+  end_time: string;
+  location: string;
+  subject: string;
+  teacher_name: string;
+  view_url: string;
 }
 
 export interface ParentResource {
@@ -110,6 +126,7 @@ interface ParentStore {
   classes: ParentClass[];
   assignments: ParentAssignment[];
   grades: ParentGrade[];
+  upcomingSessions: ParentUpcomingSession[];
   resources: ParentResource[];
   invoices: ParentInvoice[];
   messages: ParentMessage[];
@@ -125,6 +142,7 @@ interface ParentStore {
   setClasses: (classes: ParentClass[]) => void;
   setAssignments: (assignments: ParentAssignment[]) => void;
   setGrades: (grades: ParentGrade[]) => void;
+  setUpcomingSessions: (sessions: ParentUpcomingSession[]) => void;
   setResources: (resources: ParentResource[]) => void;
   setInvoices: (invoices: ParentInvoice[]) => void;
   setMessages: (messages: ParentMessage[]) => void;
@@ -150,6 +168,7 @@ export const useParentStore = create<ParentStore>()(
       classes: [],
       assignments: [],
       grades: [],
+      upcomingSessions: [],
       resources: [],
       invoices: [],
       messages: [],
@@ -187,6 +206,7 @@ export const useParentStore = create<ParentStore>()(
       setClasses: (classes) => set({ classes }),
       setAssignments: (assignments) => set({ assignments }),
       setGrades: (grades) => set({ grades }),
+      setUpcomingSessions: (sessions) => set({ upcomingSessions: sessions }),
       setResources: (resources) => set({ resources }),
       setInvoices: (invoices) => set({ invoices }),
       setMessages: (messages) => set({ messages }),
@@ -258,6 +278,7 @@ export const useParentContext = () => {
     classes: store.classes,
     assignments: store.assignments,
     grades: store.grades,
+    upcomingSessions: store.upcomingSessions,
     resources: store.resources,
     invoices: store.invoices,
     messages: store.messages,

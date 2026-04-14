@@ -1,26 +1,11 @@
 import { useMemo, useState } from 'react';
-import { addDays, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from 'date-fns';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { format, isAfter, isToday, parseISO } from 'date-fns';
+import { Calendar as CalendarIcon, Clock, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { ParentClass } from '@/lib/store/parentStore';
-
-const normalizeDayOfWeekToIndex = (dayOfWeek: unknown): number | null => {
-  if (!dayOfWeek) return null;
-  const s = String(dayOfWeek).trim().toLowerCase();
-  if (!s) return null;
-
-  if (s.startsWith('sun')) return 0;
-  if (s.startsWith('mon')) return 1;
-  if (s.startsWith('tue')) return 2;
-  if (s.startsWith('wed')) return 3;
-  if (s.startsWith('thu')) return 4;
-  if (s.startsWith('fri')) return 5;
-  if (s.startsWith('sat')) return 6;
-
-  return null;
-};
+import { useNavigate } from 'react-router-dom';
 
 export function ParentClassesCalendar({
   classes,
@@ -29,65 +14,69 @@ export function ParentClassesCalendar({
   classes: ParentClass[];
   className?: string;
 }) {
-  const [cursorDate, setCursorDate] = useState(() => new Date());
+  const navigate = useNavigate();
 
-  const monthGrid = useMemo(() => {
-    const start = startOfWeek(startOfMonth(cursorDate), { weekStartsOn: 0 }); // Sunday-start
-    const end = endOfWeek(endOfMonth(cursorDate), { weekStartsOn: 0 });
-    const days: Date[] = [];
-    let current = start;
-    while (current <= end) {
-      days.push(current);
-      current = addDays(current, 1);
-    }
-    return days;
-  }, [cursorDate]);
+  // Get upcoming sessions from all classes
+  const upcomingSessions = useMemo(() => {
+    const sessions: Array<{
+      id: string;
+      className: string;
+      tutor: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      room?: string;
+      meetingLink?: string;
+    }> = [];
 
-  const dayEvents = useMemo(() => {
-    const activeClasses = (classes || []).filter(
-      (c) => c.status === 'active' || c.status === 'upcoming'
-    );
+    const today = new Date();
 
-    return monthGrid.map((day) => {
-      const idx = day.getDay();
-      const events: Array<{ key: string; label: string; time?: string }> = [];
+    (classes || []).forEach((cls) => {
+      const scheduleData = (cls as any).scheduleData as Array<any> | undefined;
+      if (!scheduleData || !Array.isArray(scheduleData)) return;
 
-      for (const cls of activeClasses) {
-        const scheduleData = (cls as any).scheduleData as Array<any> | undefined;
-        if (!scheduleData || !Array.isArray(scheduleData)) continue;
+      scheduleData.forEach((s) => {
+        // Handle both TutoringSession (has date field) and ClassSchedule (has day_of_week)
+        let sessionDate: Date | null = null;
 
-        for (const s of scheduleData) {
-          const normalized = normalizeDayOfWeekToIndex(s?.day_of_week);
-          if (normalized !== idx) continue;
+        if (s.date) {
+          sessionDate = new Date(s.date);
+        } else if (s.day_of_week) {
+          // For day_of_week, get the next occurrence of that day
+          const dayMap: { [key: string]: number } = {
+            sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+            thursday: 4, friday: 5, saturday: 6
+          };
+          const targetDay = dayMap[s.day_of_week.toLowerCase()];
+          if (targetDay !== undefined) {
+            const currentDay = today.getDay();
+            let daysUntil = targetDay - currentDay;
+            if (daysUntil <= 0) daysUntil += 7;
+            sessionDate = new Date(today);
+            sessionDate.setDate(today.getDate() + daysUntil);
+          }
+        }
 
-          const slot = s?.start_time && s?.end_time ? `${s.start_time}-${s.end_time}` : '';
-          events.push({
-            key: `${cls.id}-${s?.day_of_week}-${slot}`,
-            label: cls.name,
-            time: slot || undefined,
+        if (sessionDate && isAfter(sessionDate, today)) {
+          sessions.push({
+            id: `${cls.id}-${s.id || Math.random()}`,
+            className: cls.name,
+            tutor: cls.tutor,
+            date: sessionDate.toISOString(),
+            startTime: s.start_time,
+            endTime: s.end_time,
+            room: s.room,
+            meetingLink: s.meeting_link,
           });
         }
-      }
-
-      events.sort(
-        (a, b) =>
-          a.label.localeCompare(b.label) ||
-          String(a.time || '').localeCompare(String(b.time || ''))
-      );
-
-      const uniq: typeof events = [];
-      const seen = new Set<string>();
-      for (const e of events) {
-        if (seen.has(e.key)) continue;
-        seen.add(e.key);
-        uniq.push(e);
-      }
-
-      return { day, events: uniq };
+      });
     });
-  }, [classes, monthGrid]);
 
-  const today = new Date();
+    // Sort by date and return latest 5
+    return sessions
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, 5);
+  }, [classes]);
 
   return (
     <Card className={className}>
@@ -95,88 +84,58 @@ export function ParentClassesCalendar({
         <div>
           <CardTitle className="flex items-center gap-2">
             <CalendarIcon className="h-5 w-5 text-muted-foreground" />
-            Student Calendar
+            Upcoming Schedule
           </CardTitle>
           <div className="text-sm text-muted-foreground">
-            Classes by day of week • {format(cursorDate, 'MMMM yyyy')}
+            Next 5 sessions
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setCursorDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))
-            }
-            aria-label="Previous month"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setCursorDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))
-            }
-            aria-label="Next month"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => navigate('/parent/classes')}>
+          View All
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
       </CardHeader>
 
       <CardContent>
-        <div className="grid grid-cols-7 gap-1 text-xs text-muted-foreground mb-2">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-            <div key={d} className="text-center">
-              {d}
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7 gap-1">
-          {dayEvents.map(({ day, events }) => {
-            const isToday = format(day, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
-            const isCurrentMonth = day.getMonth() === cursorDate.getMonth();
-
-            const visible = events.slice(0, 3);
-            const hidden = Math.max(0, events.length - visible.length);
-
-            return (
+        {upcomingSessions.length > 0 ? (
+          <div className="space-y-3">
+            {upcomingSessions.map((session) => (
               <div
-                key={day.toISOString()}
-                className={[
-                  'min-h-[92px] rounded-md border p-2',
-                  isCurrentMonth ? 'bg-background' : 'bg-muted/30',
-                  isToday ? 'border-primary ring-1 ring-primary/30' : 'border-border',
-                ].join(' ')}
+                key={session.id}
+                className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
               >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-sm font-medium">{day.getDate()}</div>
-                  {events.length > 0 && <Badge variant="secondary">{events.length}</Badge>}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="secondary" className="text-xs">
+                      {format(new Date(session.date), 'EEE')}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(session.date), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                  <h4 className="font-medium text-sm">{session.className}</h4>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                    <Clock className="h-3 w-3" />
+                    <span>{session.startTime?.substring(0, 5)} - {session.endTime?.substring(0, 5)}</span>
+                    <span>•</span>
+                    <span>{session.tutor}</span>
+                  </div>
                 </div>
-
-                <div className="space-y-1">
-                  {visible.map((e) => (
-                    <div key={e.key} className="text-[12px] leading-tight">
-                      <span className="font-medium">{e.label}</span>
-                      {e.time ? (
-                        <span className="text-muted-foreground">
-                          {' '}
-                          • <Clock className="inline h-3 w-3" /> {e.time}
-                        </span>
-                      ) : null}
-                    </div>
-                  ))}
-                  {hidden > 0 ? (
-                    <div className="text-xs text-muted-foreground">+{hidden} more</div>
-                  ) : null}
-                </div>
+                {session.room && (
+                  <div className="text-xs text-muted-foreground text-right">
+                    <div>Room: {session.room}</div>
+                  </div>
+                )}
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No upcoming sessions scheduled</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
