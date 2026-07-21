@@ -14,9 +14,11 @@ import { parentApi, type Package } from '@/lib/api';
 interface UpgradePlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called after the upgrade request is submitted successfully, e.g. to refresh a payment list. */
+  onSubmitted?: () => void;
 }
 
-export function UpgradePlanDialog({ open, onOpenChange }: UpgradePlanDialogProps) {
+export function UpgradePlanDialog({ open, onOpenChange, onSubmitted }: UpgradePlanDialogProps) {
   const { toast } = useToast();
   const [packages, setPackages] = useState<Package[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +63,7 @@ export function UpgradePlanDialog({ open, onOpenChange }: UpgradePlanDialogProps
         description: 'Your current plan stays active until an admin approves this request.',
       });
       onOpenChange(false);
+      onSubmitted?.();
     } catch (error: any) {
       toast({
         title: 'Error',

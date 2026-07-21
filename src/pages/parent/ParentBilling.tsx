@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -72,40 +72,40 @@ export default function ParentBilling() {
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
 
   // Load payments
-  useEffect(() => {
-    const loadPayments = async () => {
-      try {
-        setPaymentsLoading(true);
-        const paymentsData = await parentApi.getPayments({
-          status: statusFilter !== 'all' ? statusFilter : undefined
-        });
+  const loadPayments = useCallback(async () => {
+    try {
+      setPaymentsLoading(true);
+      const paymentsData = await parentApi.getPayments({
+        status: statusFilter !== 'all' ? statusFilter : undefined
+      });
 
-        const mappedPayments = paymentsData.map((pay: any) => ({
-          id: pay.id,
-          parent_id: pay.parent_id,
-          package_id: pay.package_id,
-          amount: parseFloat(String(pay.amount || 0)),
-          payment_slip_path: pay.payment_slip_path,
-          status: pay.status,
-          admin_notes: pay.admin_notes,
-          approved_by: pay.approved_by,
-          approved_at: pay.approved_at,
-          created_at: pay.created_at,
-          updated_at: pay.updated_at,
-          package: pay.package,
-          approver: pay.approver,
-        }));
+      const mappedPayments = paymentsData.map((pay: any) => ({
+        id: pay.id,
+        parent_id: pay.parent_id,
+        package_id: pay.package_id,
+        amount: parseFloat(String(pay.amount || 0)),
+        payment_slip_path: pay.payment_slip_path,
+        status: pay.status,
+        admin_notes: pay.admin_notes,
+        approved_by: pay.approved_by,
+        approved_at: pay.approved_at,
+        created_at: pay.created_at,
+        updated_at: pay.updated_at,
+        package: pay.package,
+        approver: pay.approver,
+      }));
 
-        setPayments(mappedPayments);
-      } catch (error) {
-        console.error('Failed to load payments:', error);
-      } finally {
-        setPaymentsLoading(false);
-      }
-    };
-
-    loadPayments();
+      setPayments(mappedPayments);
+    } catch (error) {
+      console.error('Failed to load payments:', error);
+    } finally {
+      setPaymentsLoading(false);
+    }
   }, [statusFilter]);
+
+  useEffect(() => {
+    loadPayments();
+  }, [loadPayments]);
 
   // Filter payments
   const filteredPayments = payments?.filter((payment) => {
@@ -381,7 +381,7 @@ export default function ParentBilling() {
         </Card>
       )}
 
-      <UpgradePlanDialog open={isUpgradeOpen} onOpenChange={setIsUpgradeOpen} />
+      <UpgradePlanDialog open={isUpgradeOpen} onOpenChange={setIsUpgradeOpen} onSubmitted={loadPayments} />
     </div>
   );
 }
