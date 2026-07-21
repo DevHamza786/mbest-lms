@@ -40,6 +40,7 @@ import {
   Eye
 } from 'lucide-react';
 import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
+import { UpgradePlanDialog } from '@/components/parent/UpgradePlanDialog';
 import { parentApi } from '@/lib/api';
 
 interface ParentPayment {
@@ -68,6 +69,7 @@ export default function ParentBilling() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedPayment, setSelectedPayment] = useState<ParentPayment | null>(null);
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
 
   // Load payments
   useEffect(() => {
@@ -165,7 +167,10 @@ export default function ParentBilling() {
             View your subscription payment history
           </p>
         </div>
-        <ChildSwitcher />
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setIsUpgradeOpen(true)}>Upgrade Plan</Button>
+          <ChildSwitcher />
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -375,6 +380,8 @@ export default function ParentBilling() {
           </CardContent>
         </Card>
       )}
+
+      <UpgradePlanDialog open={isUpgradeOpen} onOpenChange={setIsUpgradeOpen} />
     </div>
   );
 }
