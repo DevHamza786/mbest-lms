@@ -105,7 +105,11 @@ class ApiClient {
 
       if (isJson) {
         const error = await response.json();
-        throw new Error(error.message || `API Error: ${response.statusText}`);
+        const err = new Error(error.message || `API Error: ${response.statusText}`);
+        // Preserve the full parsed error body (e.g. `limit_reached`, `errors`) so callers
+        // can branch on structured fields instead of matching on message text.
+        Object.assign(err, error);
+        throw err;
       }
 
       throw new Error(`API Error: ${response.status} ${response.statusText}`);
