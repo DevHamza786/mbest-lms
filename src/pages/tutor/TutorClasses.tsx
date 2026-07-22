@@ -1640,7 +1640,7 @@ export default function TutorClasses() {
 
       {/* View Class Students Dialog */}
       <Dialog open={isViewClassStudentsOpen} onOpenChange={setIsViewClassStudentsOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>
               {selectedClass ? `${selectedClass.name} - Enrolled Students` : 'Enrolled Students'}
@@ -1649,6 +1649,7 @@ export default function TutorClasses() {
               View all students enrolled in this class
             </DialogDescription>
           </DialogHeader>
+          <div className="flex-1 overflow-y-auto">
           {loadingClassStudents ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -1670,7 +1671,7 @@ export default function TutorClasses() {
               {classStudents.length > 0 ? (
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Students ({classStudents.length})</Label>
-                  <div className="border rounded-md divide-y max-h-[400px] overflow-y-auto">
+                  <div className="border rounded-md divide-y">
                     {classStudents.map((student) => (
                       <div key={student.id} className="p-4 hover:bg-muted/50 transition-colors">
                         <div className="flex items-start justify-between">
@@ -1708,6 +1709,7 @@ export default function TutorClasses() {
               <p className="text-sm text-muted-foreground">No class selected</p>
             </div>
           )}
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsViewClassStudentsOpen(false)}>
               Close
