@@ -636,9 +636,9 @@ export default function AdminClasses() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="classCredits">Credits</Label>
-                  <Input 
-                    id="classCredits" 
+                  <Label htmlFor="classCredits">Hours</Label>
+                  <Input
+                    id="classCredits"
                     type="number"
                     placeholder="e.g., 3"
                     value={classForm.credits}
@@ -1710,9 +1710,9 @@ export default function AdminClasses() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="editClassCredits">Credits</Label>
-                <Input 
-                  id="editClassCredits" 
+                <Label htmlFor="editClassCredits">Hours</Label>
+                <Input
+                  id="editClassCredits"
                   type="number"
                   placeholder="e.g., 3"
                   value={classForm.credits}
