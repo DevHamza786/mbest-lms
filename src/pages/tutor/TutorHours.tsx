@@ -15,6 +15,16 @@ import { generateTutorInvoicePDF } from '@/lib/utils/invoicePdf';
 import { tutorApi } from '@/lib/api';
 import { format } from 'date-fns';
 
+// A single malformed date (null/missing/unparseable) used to throw inside
+// .map() and silently fail the *entire* hours/invoices list - one bad row
+// was enough to make the whole page look like it wasn't loading any data.
+function safeFormat(value: string | null | undefined, pattern: string, fallback = '—'): string {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return format(date, pattern);
+}
+
 interface LessonHour {
   id: string;
   date: string;
@@ -84,12 +94,12 @@ export default function TutorHours() {
       // Map sessions to LessonHour format
       const mappedHours: LessonHour[] = sessions.map((session: any) => ({
         id: String(session.id),
-        date: format(new Date(session.date), 'dd/MM/yyyy'),
+        date: safeFormat(session.date, 'dd/MM/yyyy'),
         title: session.subject || 'Session',
         students: session.students?.map((s: any) => s.user?.name || 'Student') || [],
         status: session.status === 'completed' ? 'Attended' : session.status === 'cancelled' ? 'Tutor Cancelled' : 'Student Cancelled',
-        start: format(new Date(`2000-01-01T${session.start_time}`), 'hh:mm a'),
-        end: format(new Date(`2000-01-01T${session.end_time}`), 'hh:mm a'),
+        start: session.start_time ? safeFormat(`2000-01-01T${session.start_time}`, 'hh:mm a') : '—',
+        end: session.end_time ? safeFormat(`2000-01-01T${session.end_time}`, 'hh:mm a') : '—',
         hours: session.hours || 0,
         earnings: session.earnings || 0,
         paid: session.paid || false,
@@ -127,9 +137,9 @@ export default function TutorHours() {
       const mappedInvoices: TutorInvoice[] = invoicesData.map((invoice: any) => ({
         id: String(invoice.id),
         invoiceNumber: invoice.invoice_number || `INV-${invoice.id}`,
-        date: format(new Date(invoice.issue_date), 'dd/MM/yyyy'),
-        periodStart: format(new Date(invoice.period_start), 'dd/MM/yyyy'),
-        periodEnd: format(new Date(invoice.period_end), 'dd/MM/yyyy'),
+        date: safeFormat(invoice.issue_date, 'dd/MM/yyyy'),
+        periodStart: safeFormat(invoice.period_start, 'dd/MM/yyyy'),
+        periodEnd: safeFormat(invoice.period_end, 'dd/MM/yyyy'),
         status: invoice.status === 'paid' ? 'Paid' : invoice.status === 'pending' ? 'Pending' : 'Overdue',
         amount: parseFloat(invoice.amount || 0),
       }));
