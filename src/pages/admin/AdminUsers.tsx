@@ -783,7 +783,10 @@ export default function AdminUsers() {
                                 {user.name.split(' ').map(n => n[0]).join('')}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="font-medium">{user.name}</span>
+                            <span className="font-medium">
+                              {user.name}
+                              {user.role === 'student' && user.student?.grade ? ` – ${user.student.grade}` : ''}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>
