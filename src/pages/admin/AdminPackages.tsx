@@ -178,13 +178,13 @@ export default function AdminPackages() {
         await adminApi.updatePackage(selectedPackage.id, cleanedFormData);
         toast({
           title: 'Success',
-          description: 'Subscription plan updated successfully',
+          description: 'Package plan updated successfully',
         });
       } else {
         await adminApi.createPackage(cleanedFormData);
         toast({
           title: 'Success',
-          description: 'Subscription plan created successfully',
+          description: 'Package plan created successfully',
         });
       }
       setIsDialogOpen(false);
@@ -211,20 +211,20 @@ export default function AdminPackages() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Subscription plan</h1>
-          <p className="text-muted-foreground">Manage subscription plans for parents</p>
+          <h1 className="text-3xl font-bold">Package plan</h1>
+          <p className="text-muted-foreground">Manage package plans for parents</p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          Create Subscription plan
+          Create Package plan
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All Subscription plans</CardTitle>
+          <CardTitle>All Package plans</CardTitle>
           <CardDescription>
-            Manage subscription plans and their limits. Plans cannot be deleted to maintain subscription history. 
+            Manage package plans and their limits. Plans cannot be deleted to maintain subscription history. 
             Use the "Active" toggle to deactivate plans instead.
           </CardDescription>
         </CardHeader>
@@ -245,7 +245,7 @@ export default function AdminPackages() {
               {!loading && packages.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    No subscription plans found. Create your first plan.
+                    No package plans found. Create your first plan.
                   </TableCell>
                 </TableRow>
               ) : packages.length > 0 ? (
@@ -307,14 +307,14 @@ export default function AdminPackages() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedPackage ? 'Edit Subscription plan' : 'Create Subscription plan'}</DialogTitle>
+            <DialogTitle>{selectedPackage ? 'Edit Package plan' : 'Create Package plan'}</DialogTitle>
             <DialogDescription>
-              {selectedPackage ? 'Update plan details' : 'Create a new subscription plan'}
+              {selectedPackage ? 'Update plan details' : 'Create a new package plan'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Subscription plan Name *</Label>
+              <Label htmlFor="name">Package plan Name *</Label>
               <Input
                 id="name"
                 value={formData.name}

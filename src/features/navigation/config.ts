@@ -101,8 +101,8 @@ export const navByRole: Record<UserRole, NavSection[]> = {
         { 
           href: '/admin/packages', 
           icon: Package, 
-          label: 'Subscription plan',
-          description: 'Manage subscription plans'
+          label: 'Package plan',
+          description: 'Manage package plans'
         },
         { 
           href: '/admin/payments', 
