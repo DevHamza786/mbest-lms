@@ -319,8 +319,9 @@ export const adminApi = {
     return response.data.data;
   },
 
-  async deleteUser(id: number): Promise<void> {
-    await apiClient.delete(`/admin/users/${id}`);
+  async deleteUser(id: number): Promise<{ message?: string; deactivated?: boolean }> {
+    const response = await apiClient.delete<any>(`/admin/users/${id}`);
+    return { message: response.message, deactivated: response.data?.deactivated };
   },
 
   async resetUserPassword(id: number, password: string): Promise<void> {

@@ -400,10 +400,10 @@ export default function AdminUsers() {
     }
 
     try {
-      await adminApi.deleteUser(user.id);
+      const result = await adminApi.deleteUser(user.id);
       toast({
-        title: "Success",
-        description: "User deleted successfully",
+        title: result.deactivated ? "Account Deactivated" : "Success",
+        description: result.message || "User deleted successfully",
       });
       fetchUsers();
       refreshStats();
