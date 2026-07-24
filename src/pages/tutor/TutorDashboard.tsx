@@ -4,11 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, Users, FileText, Clock, BookOpen, MessageSquare, Plus, Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { tutorApi } from '@/lib/api';
 import { sessionIsOnline } from '@/lib/sessionLocation';
@@ -18,9 +13,7 @@ const TutorDashboard = () => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
-  const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false);
-  const [isMessageOpen, setIsMessageOpen] = useState(false);
-  
+
   const [dashboardData, setDashboardData] = useState({
     total_students: 0,
     total_classes: 0,
@@ -30,32 +23,11 @@ const TutorDashboard = () => {
     tutor: null as any,
   });
 
-  const [myClasses, setMyClasses] = useState<any[]>([]);
-  const [filteredClasses, setFilteredClasses] = useState<any[]>([]);
-
-  const [newAssignment, setNewAssignment] = useState({
-    title: '',
-    class: '',
-    dueDate: '',
-    description: '',
-  });
-
-  const [newMessage, setNewMessage] = useState({
-    recipient: '',
-    subject: '',
-    message: '',
-  });
-
   useEffect(() => {
     const loadDashboard = async () => {
       try {
         setIsLoading(true);
-        const [dashboard, classes] = await Promise.all([
-          tutorApi.getDashboard(),
-          tutorApi.getClasses(),
-        ]);
-        console.log('Dashboard data received:', dashboard);
-        console.log('Classes received:', classes);
+        const dashboard = await tutorApi.getDashboard();
         setDashboardData({
           total_students: dashboard.total_students || 0,
           total_classes: dashboard.total_classes || 0,
@@ -64,46 +36,6 @@ const TutorDashboard = () => {
           upcoming_sessions: dashboard.upcoming_sessions || [],
           tutor: dashboard.tutor || null,
         });
-        setMyClasses(classes || []);
-        
-        // Filter classes by tutor's specializations
-        if (dashboard.tutor?.specialization && Array.isArray(dashboard.tutor.specialization) && dashboard.tutor.specialization.length > 0) {
-          console.log('Tutor specializations:', dashboard.tutor.specialization);
-          const tutorSpecializations = dashboard.tutor.specialization.map((s: string) => s.toLowerCase().trim());
-          const filtered = (classes || []).filter((cls: any) => {
-            // Check if class belongs to this tutor
-            if (cls.tutor_id && cls.tutor_id === dashboard.tutor.id) {
-              return true;
-            }
-            
-            // Check if class category matches any specialization
-            const classCategory = (cls.category || '').toLowerCase().trim();
-            if (!classCategory) return false;
-            
-            return tutorSpecializations.some((spec: string) => {
-              // More flexible matching
-              return classCategory === spec || 
-                     classCategory.includes(spec) || 
-                     spec.includes(classCategory) ||
-                     classCategory.split(' ').some(word => spec.includes(word)) ||
-                     spec.split(' ').some(word => classCategory.includes(word));
-            });
-          });
-          
-          console.log('Filtered classes:', filtered);
-          
-          // If filtering results in empty array, show all classes as fallback
-          if (filtered.length > 0) {
-            setFilteredClasses(filtered);
-          } else {
-            console.log('No classes match specializations, showing all classes');
-            setFilteredClasses(classes || []);
-          }
-        } else {
-          // If no specializations, show all classes
-          console.log('No specializations found, showing all classes');
-          setFilteredClasses(classes || []);
-        }
       } catch (error) {
         console.error('Failed to load dashboard:', error);
         toast({
@@ -119,55 +51,6 @@ const TutorDashboard = () => {
     loadDashboard();
   }, [toast]);
 
-  const handleCreateAssignment = () => {
-    if (!newAssignment.title || !newAssignment.class || !newAssignment.dueDate) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    toast({
-      title: "Assignment Created",
-      description: `${newAssignment.title} has been created successfully.`,
-    });
-    setNewAssignment({ title: '', class: '', dueDate: '', description: '' });
-    setIsCreateAssignmentOpen(false);
-  };
-
-  const handleSendMessage = () => {
-    if (!newMessage.recipient || !newMessage.subject || !newMessage.message) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    toast({
-      title: "Message Sent",
-      description: `Message sent to ${newMessage.recipient} successfully.`,
-    });
-    setNewMessage({ recipient: '', subject: '', message: '' });
-    setIsMessageOpen(false);
-  };
-
-  const handleViewStudents = () => {
-    toast({
-      title: "Redirecting",
-      description: "Opening student management page.",
-    });
-  };
-
-  const handleScheduleMeeting = () => {
-    toast({
-      title: "Meeting Scheduler",
-      description: "Opening meeting scheduler.",
-    });
-  };
   const stats = {
     totalStudents: dashboardData.total_students,
     activeClasses: dashboardData.total_classes,
@@ -399,130 +282,22 @@ const TutorDashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="flex gap-2 flex-wrap">
-            <Dialog open={isCreateAssignmentOpen} onOpenChange={setIsCreateAssignmentOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Create Assignment
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[525px]">
-                <DialogHeader>
-                  <DialogTitle>Create New Assignment</DialogTitle>
-                  <DialogDescription>
-                    Create a new assignment for your students
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="assignment-title">Assignment Title</Label>
-                    <Input
-                      id="assignment-title"
-                      value={newAssignment.title}
-                      onChange={(e) => setNewAssignment(prev => ({ ...prev, title: e.target.value }))}
-                      placeholder="e.g., React Component Architecture"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="assignment-class">Class</Label>
-                    <Select value={newAssignment.class} onValueChange={(value) => setNewAssignment(prev => ({ ...prev, class: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(filteredClasses.length > 0 ? filteredClasses : myClasses).map(cls => (
-                          <SelectItem key={cls.id} value={String(cls.id)}>{cls.name}</SelectItem>
-                        ))}
-                        {filteredClasses.length === 0 && myClasses.length === 0 && (
-                          <div className="px-2 py-1.5 text-sm text-muted-foreground">No classes available</div>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="due-date">Due Date</Label>
-                    <Input
-                      id="due-date"
-                      type="date"
-                      value={newAssignment.dueDate}
-                      onChange={(e) => setNewAssignment(prev => ({ ...prev, dueDate: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="assignment-description">Description</Label>
-                    <Textarea
-                      id="assignment-description"
-                      value={newAssignment.description}
-                      onChange={(e) => setNewAssignment(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Assignment instructions and requirements..."
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button onClick={handleCreateAssignment}>Create Assignment</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" onClick={() => navigate('/tutor/assignments')}>
+              <FileText className="mr-2 h-4 w-4" />
+              Create Assignment
+            </Button>
 
-            <Button variant="outline" onClick={handleViewStudents}>
+            <Button variant="outline" onClick={() => navigate('/tutor/students')}>
               <Users className="mr-2 h-4 w-4" />
               View All Students
             </Button>
 
-            <Dialog open={isMessageOpen} onOpenChange={setIsMessageOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Send Message
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Send Message</DialogTitle>
-                  <DialogDescription>
-                    Send a message to students or parents
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="recipient">Recipient</Label>
-                    <Select value={newMessage.recipient} onValueChange={(value) => setNewMessage(prev => ({ ...prev, recipient: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select recipient" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Emma Thompson">Emma Thompson (Student)</SelectItem>
-                        <SelectItem value="James Rodriguez">James Rodriguez (Student)</SelectItem>
-                        <SelectItem value="Robert Thompson">Robert Thompson (Parent)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="message-subject">Subject</Label>
-                    <Input
-                      id="message-subject"
-                      value={newMessage.subject}
-                      onChange={(e) => setNewMessage(prev => ({ ...prev, subject: e.target.value }))}
-                      placeholder="Message subject"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="message-body">Message</Label>
-                    <Textarea
-                      id="message-body"
-                      value={newMessage.message}
-                      onChange={(e) => setNewMessage(prev => ({ ...prev, message: e.target.value }))}
-                      placeholder="Type your message here..."
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button onClick={handleSendMessage}>Send Message</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" onClick={() => navigate('/tutor/messaging')}>
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Send Message
+            </Button>
 
-            <Button variant="outline" onClick={handleScheduleMeeting}>
+            <Button variant="outline" onClick={() => navigate('/tutor/classes')}>
               <Calendar className="mr-2 h-4 w-4" />
               Schedule Meeting
             </Button>
