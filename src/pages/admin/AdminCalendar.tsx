@@ -283,6 +283,7 @@ export default function AdminCalendar() {
         end_time: formData.endTime,
         teacher_id: teacherId!,
         subject: formData.subject,
+        title: formData.title || undefined,
         year_level: formData.yearLevel || undefined,
         location_type: formData.locationType,
         location_detail: formData.locationDetail.trim(),
@@ -291,6 +292,7 @@ export default function AdminCalendar() {
         student_ids: studentIds.length ? studentIds : undefined,
         repeat_days: formData.repeatDays?.length ? formData.repeatDays : undefined,
         repeat_until: formData.repeatDays?.length ? formData.repeatUntil : undefined,
+        materials: formData.materials?.length ? formData.materials : undefined,
       });
       setSessions(prev => [...prev, ...created.map(mapAdminSessionToSession)]);
 

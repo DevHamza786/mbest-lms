@@ -114,7 +114,7 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
     if (!formData.endTime) errors.push('End time is required');
     if (!formData.teacherId) errors.push('Teacher is required');
     if (formData.studentIds.length === 0) errors.push('At least one student is required');
-    if (!formData.subject) errors.push('Session title / subject is required');
+    if (!formData.subject) errors.push('Subject is required');
     if (!formData.locationDetail?.trim()) {
       errors.push('Add a meeting link or onsite address (location detail)');
     }
@@ -291,7 +291,7 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
           {/* Session Title / Subject */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="subject">Session Title / Subject *</Label>
+              <Label htmlFor="subject">Subject *</Label>
               <Select value={formData.subject} onValueChange={(value) => setFormData({ ...formData, subject: value })}>
                 <SelectTrigger id="subject">
                   <SelectValue placeholder="Select subject" />
@@ -302,6 +302,15 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label htmlFor="title">Session Title (optional)</Label>
+              <Input
+                id="title"
+                value={formData.title || ''}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="e.g., Algebra Review"
+              />
             </div>
             {/* Year level now inherited from class, so we omit it here */}
           </div>
@@ -376,6 +385,23 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
               <p className="text-xs text-muted-foreground mt-1">
                 Select one or more days to create a session on each matching day through the end date. Leave unchecked to create a single session.
               </p>
+            </div>
+          )}
+
+          {mode === 'create' && (
+            <div>
+              <Label htmlFor="materials">Materials (optional)</Label>
+              <Input
+                id="materials"
+                type="file"
+                multiple
+                onChange={(e) => setFormData({ ...formData, materials: e.target.files ? Array.from(e.target.files) : [] })}
+              />
+              {(formData.materials || []).length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.materials!.length} file{formData.materials!.length === 1 ? '' : 's'} selected
+                </p>
+              )}
             </div>
           )}
           <div>

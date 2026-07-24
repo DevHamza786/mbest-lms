@@ -56,6 +56,7 @@ export interface SessionFormData {
   teacherId: string;
   studentIds: string[];
   subject: string;
+  title?: string;
   yearLevel: string;
   locationType: SessionLocationMode;
   locationDetail: string;
@@ -64,6 +65,7 @@ export interface SessionFormData {
   occurrences?: number; // how many days/occurrences to create
   repeatDays?: number[]; // days of week to repeat on (0=Sun..6=Sat)
   repeatUntil?: string; // ISO date; last date to repeat through
+  materials?: File[]; // optional attachments to upload (create mode only)
 }
 
 export interface SessionFilter {

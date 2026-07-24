@@ -576,6 +576,8 @@ export const adminApi = {
     teacher_id: number;
     class_id?: number;
     subject: string;
+    title?: string;
+    lesson_note?: string;
     year_level?: string;
     location_type: 'online' | 'onsite';
     location_detail?: string;
@@ -584,8 +586,29 @@ export const adminApi = {
     student_ids?: number[];
     repeat_days?: number[];
     repeat_until?: string;
+    materials?: File[];
   }): Promise<AdminSession[]> {
-    const response = await apiClient.post<{ data: AdminSession | AdminSession[] }>('/admin/calendar/sessions', data);
+    const { materials, ...rest } = data;
+    let payload: any = rest;
+    if (materials && materials.length > 0) {
+      const formData = new FormData();
+      Object.entries(rest).forEach(([key, value]) => {
+        if (value === undefined || value === null) return;
+        if (Array.isArray(value)) {
+          value.forEach((v) => formData.append(`${key}[]`, String(v)));
+        } else {
+          formData.append(key, String(value));
+        }
+      });
+      materials.forEach((file) => formData.append('materials[]', file));
+      payload = formData;
+    }
+    const response = await apiClient.post<{ data: AdminSession | AdminSession[] }>(
+      '/admin/calendar/sessions',
+      payload,
+      true,
+      !!(materials && materials.length > 0)
+    );
     const respData = (response as any).data;
     if (!respData) throw new Error('Failed to create session');
     const inner = typeof respData === 'object' && respData.data !== undefined ? respData.data : respData;
