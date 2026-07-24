@@ -3,14 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, FileText, Clock, BookOpen, MessageSquare, Plus, Loader2, X, ChevronDown } from "lucide-react";
+import { Calendar, Users, FileText, Clock, BookOpen, MessageSquare, Plus, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { tutorApi } from '@/lib/api';
 import { sessionIsOnline } from '@/lib/sessionLocation';
@@ -20,7 +18,6 @@ const TutorDashboard = () => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
-  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false);
   const [isMessageOpen, setIsMessageOpen] = useState(false);
   
@@ -35,15 +32,6 @@ const TutorDashboard = () => {
 
   const [myClasses, setMyClasses] = useState<any[]>([]);
   const [filteredClasses, setFilteredClasses] = useState<any[]>([]);
-  const [availableStudents, setAvailableStudents] = useState<any[]>([]);
-  
-  const [newSession, setNewSession] = useState({
-    title: '',
-    date: '',
-    time: '',
-    class: '',
-    studentIds: [] as number[],
-  });
 
   const [newAssignment, setNewAssignment] = useState({
     title: '',
@@ -62,10 +50,9 @@ const TutorDashboard = () => {
     const loadDashboard = async () => {
       try {
         setIsLoading(true);
-        const [dashboard, classes, students] = await Promise.all([
+        const [dashboard, classes] = await Promise.all([
           tutorApi.getDashboard(),
           tutorApi.getClasses(),
-          tutorApi.getStudents(),
         ]);
         console.log('Dashboard data received:', dashboard);
         console.log('Classes received:', classes);
@@ -117,8 +104,6 @@ const TutorDashboard = () => {
           console.log('No specializations found, showing all classes');
           setFilteredClasses(classes || []);
         }
-        
-        setAvailableStudents(students || []);
       } catch (error) {
         console.error('Failed to load dashboard:', error);
         toast({
@@ -133,125 +118,6 @@ const TutorDashboard = () => {
 
     loadDashboard();
   }, [toast]);
-
-  const handleScheduleClass = async () => {
-    if (!newSession.title || !newSession.date || !newSession.time || !newSession.class) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (newSession.studentIds.length === 0) {
-      toast({
-        title: "Missing Information",
-        description: "Please select at least one student.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      // Parse time to HH:MM format
-      const [hours, minutes] = newSession.time.split(':');
-      const startHour = parseInt(hours);
-      const startMin = parseInt(minutes);
-      const startTime = `${startHour.toString().padStart(2, '0')}:${startMin.toString().padStart(2, '0')}`;
-      
-      // Calculate end time (default duration to 1 hour)
-      // Handle hour overflow (if hour >= 24, wrap to next day by using 23:59 as max)
-      let endHour = startHour + 1;
-      let endMin = startMin;
-      
-      // If hour exceeds 23, cap at 23:59
-      if (endHour >= 24) {
-        endHour = 23;
-        endMin = 59;
-      }
-      
-      const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
-
-      // Get selected class to get subject/category
-      const selectedClass = filteredClasses.find(c => String(c.id) === newSession.class) || myClasses.find(c => String(c.id) === newSession.class);
-      
-      // Create session via API
-      await tutorApi.createSession({
-        date: newSession.date,
-        start_time: startTime,
-        end_time: endTime,
-        subject: newSession.title || selectedClass?.name || 'Class Session',
-        year_level: selectedClass?.level || '',
-        location: 'centre', // Default to centre, can be updated later
-        session_type: newSession.studentIds.length === 1 ? '1:1' : 'group',
-        student_ids: newSession.studentIds,
-        class_id: newSession.class ? Number(newSession.class) : undefined,
-      });
-
-      toast({
-        title: "Class Scheduled",
-        description: `${newSession.title} has been scheduled successfully.`,
-      });
-      
-      // Reload dashboard to show new session
-      const [dashboard, classes] = await Promise.all([
-        tutorApi.getDashboard(),
-        tutorApi.getClasses(),
-      ]);
-      setDashboardData({
-        total_students: dashboard.total_students || 0,
-        total_classes: dashboard.total_classes || 0,
-        pending_assignments: dashboard.pending_assignments || 0,
-        unread_messages: dashboard.unread_messages || 0,
-        upcoming_sessions: dashboard.upcoming_sessions || [],
-        tutor: dashboard.tutor || null,
-      });
-      setMyClasses(classes || []);
-      
-      // Filter classes again
-      if (dashboard.tutor?.specialization && Array.isArray(dashboard.tutor.specialization) && dashboard.tutor.specialization.length > 0) {
-        const tutorSpecializations = dashboard.tutor.specialization.map((s: string) => s.toLowerCase().trim());
-        const filtered = (classes || []).filter((cls: any) => {
-          // Check if class belongs to this tutor
-          if (cls.tutor_id && cls.tutor_id === dashboard.tutor.id) {
-            return true;
-          }
-          
-          // Check if class category matches any specialization
-          const classCategory = (cls.category || '').toLowerCase().trim();
-          if (!classCategory) return false;
-          
-          return tutorSpecializations.some((spec: string) => {
-            return classCategory === spec || 
-                   classCategory.includes(spec) || 
-                   spec.includes(classCategory) ||
-                   classCategory.split(' ').some(word => spec.includes(word)) ||
-                   spec.split(' ').some(word => classCategory.includes(word));
-          });
-        });
-        
-        // If filtering results in empty array, show all classes as fallback
-        if (filtered.length > 0) {
-          setFilteredClasses(filtered);
-        } else {
-          setFilteredClasses(classes || []);
-        }
-      } else {
-        setFilteredClasses(classes || []);
-      }
-      
-      setNewSession({ title: '', date: '', time: '', class: '', studentIds: [] });
-      setIsScheduleOpen(false);
-    } catch (error) {
-      console.error('Failed to schedule class:', error);
-      toast({
-        title: "Error",
-        description: "Failed to schedule class. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleCreateAssignment = () => {
     if (!newAssignment.title || !newAssignment.class || !newAssignment.dueDate) {
@@ -378,156 +244,6 @@ const TutorDashboard = () => {
     <div className="flex-1 space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Tutor Dashboard</h1>
-        <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Calendar className="mr-2 h-4 w-4" />
-              Schedule Class
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Schedule New Class</DialogTitle>
-              <DialogDescription>
-                Schedule a new class session for your students
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Session Title</Label>
-                <Input
-                  id="title"
-                  value={newSession.title}
-                  onChange={(e) => setNewSession(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="e.g., Advanced React Patterns"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="class">Class</Label>
-                <Select value={newSession.class} onValueChange={(value) => setNewSession(prev => ({ ...prev, class: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a class" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(filteredClasses.length > 0 ? filteredClasses : myClasses).map(cls => (
-                      <SelectItem key={cls.id} value={String(cls.id)}>{cls.name}</SelectItem>
-                    ))}
-                    {filteredClasses.length === 0 && myClasses.length === 0 && (
-                      <div className="px-2 py-1.5 text-sm text-muted-foreground">No classes available</div>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Students *</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className="w-full justify-between h-auto min-h-10 py-2"
-                    >
-                      <div className="flex flex-wrap gap-1 flex-1">
-                        {newSession.studentIds.length === 0 ? (
-                          <span className="text-muted-foreground">Select students...</span>
-                        ) : (
-                          newSession.studentIds.map((studentId) => {
-                            const student = availableStudents.find(s => s.id === studentId);
-                            return (
-                              <Badge
-                                key={studentId}
-                                variant="secondary"
-                                className="mr-1"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setNewSession(prev => ({
-                                    ...prev,
-                                    studentIds: prev.studentIds.filter(id => id !== studentId)
-                                  }));
-                                }}
-                              >
-                                {student?.user?.name || `Student ${studentId}`}
-                                <X className="ml-1 h-3 w-3" />
-                              </Badge>
-                            );
-                          })
-                        )}
-                      </div>
-                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0" align="start">
-                    <div className="max-h-60 overflow-y-auto">
-                      {availableStudents.length > 0 ? (
-                        <div className="p-2 space-y-2">
-                          {availableStudents.map((student) => (
-                            <div key={student.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`student-${student.id}`}
-                                checked={newSession.studentIds.includes(student.id)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setNewSession(prev => ({
-                                      ...prev,
-                                      studentIds: [...prev.studentIds, student.id]
-                                    }));
-                                  } else {
-                                    setNewSession(prev => ({
-                                      ...prev,
-                                      studentIds: prev.studentIds.filter(id => id !== student.id)
-                                    }));
-                                  }
-                                }}
-                              />
-                              <Label
-                                htmlFor={`student-${student.id}`}
-                                className="text-sm font-normal cursor-pointer flex-1"
-                              >
-                                {student.user?.name || `Student ${student.id}`}{student.grade ? ` – ${student.grade}` : ''}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-4 text-sm text-muted-foreground text-center">
-                          No students available
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                {newSession.studentIds.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {newSession.studentIds.length} student{newSession.studentIds.length !== 1 ? 's' : ''} selected
-                  </p>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date">Date</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={newSession.date}
-                    onChange={(e) => setNewSession(prev => ({ ...prev, date: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="time">Time</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={newSession.time}
-                    onChange={(e) => setNewSession(prev => ({ ...prev, time: e.target.value }))}
-                  />
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleScheduleClass}>Schedule Class</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Stats Cards */}
