@@ -275,29 +275,24 @@ export default function AdminCalendar() {
     if (formMode === 'create') {
       const teacherId = formData.teacherId ? parseInt(formData.teacherId, 10) : undefined;
       const studentIds = (formData.studentIds || []).map(id => parseInt(id, 10)).filter(Boolean);
-      const occurrences = formData.occurrences && formData.occurrences > 0 ? formData.occurrences : 1;
+      const baseDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : formData.date;
 
-      let currentDate = selectedDate || new Date(formData.date);
-
-      for (let i = 0; i < occurrences; i++) {
-        const created = await adminApi.createSession({
-          date: format(currentDate, 'yyyy-MM-dd'),
-          start_time: formData.startTime,
-          end_time: formData.endTime,
-          teacher_id: teacherId!,
-          subject: formData.subject,
-          year_level: formData.yearLevel || undefined,
-          location_type: formData.locationType,
-          location_detail: formData.locationDetail.trim(),
-          session_type: formData.sessionType,
-          status: formData.status || 'planned',
-          student_ids: studentIds.length ? studentIds : undefined,
-        });
-        const mapped = mapAdminSessionToSession(created);
-        setSessions(prev => [...prev, mapped]);
-        // Move to next day
-        currentDate = addDays(currentDate, 1);
-      }
+      const created = await adminApi.createSession({
+        date: baseDate,
+        start_time: formData.startTime,
+        end_time: formData.endTime,
+        teacher_id: teacherId!,
+        subject: formData.subject,
+        year_level: formData.yearLevel || undefined,
+        location_type: formData.locationType,
+        location_detail: formData.locationDetail.trim(),
+        session_type: formData.sessionType,
+        status: formData.status || 'planned',
+        student_ids: studentIds.length ? studentIds : undefined,
+        repeat_days: formData.repeatDays?.length ? formData.repeatDays : undefined,
+        repeat_until: formData.repeatDays?.length ? formData.repeatUntil : undefined,
+      });
+      setSessions(prev => [...prev, ...created.map(mapAdminSessionToSession)]);
 
       await fetchSessions();
     } else if (selectedSession) {

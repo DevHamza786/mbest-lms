@@ -118,6 +118,9 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
     if (!formData.locationDetail?.trim()) {
       errors.push('Add a meeting link or onsite address (location detail)');
     }
+    if ((formData.repeatDays || []).length > 0 && !formData.repeatUntil) {
+      errors.push('Pick a "Repeat until" date for the selected weekdays');
+    }
 
     // Validate time range
     if (formData.startTime && formData.endTime) {
@@ -332,20 +335,49 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="occurrences">Number of Days / Occurrences</Label>
-              <Input
-                id="occurrences"
-                type="number"
-                min={1}
-                max={30}
-                value={formData.occurrences ?? 1}
-                onChange={(e) =>
-                  setFormData({ ...formData, occurrences: Math.max(1, parseInt(e.target.value || '1', 10)) })
-                }
-              />
-            </div>
           </div>
+
+          {mode === 'create' && (
+            <div>
+              <Label>Repeat weekly on (optional)</Label>
+              <div className="flex flex-wrap gap-3 mt-2">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, dayIndex) => {
+                  const checked = (formData.repeatDays || []).includes(dayIndex);
+                  return (
+                    <label key={dayIndex} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const current = formData.repeatDays || [];
+                          const repeatDays = e.target.checked
+                            ? [...current, dayIndex]
+                            : current.filter((d) => d !== dayIndex);
+                          setFormData({ ...formData, repeatDays });
+                        }}
+                      />
+                      {label}
+                    </label>
+                  );
+                })}
+              </div>
+              {(formData.repeatDays || []).length > 0 && (
+                <div className="mt-2 max-w-[220px]">
+                  <Label htmlFor="repeatUntil" className="text-xs text-muted-foreground">Repeat until</Label>
+                  <Input
+                    id="repeatUntil"
+                    type="date"
+                    value={formData.repeatUntil || ''}
+                    min={formData.date}
+                    onChange={(e) => setFormData({ ...formData, repeatUntil: e.target.value })}
+                  />
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Select one or more days to create a session on each matching day through the end date. Leave unchecked to create a single session.
+              </p>
+            </div>
+          )}
           <div>
             <Label htmlFor="locationDetail">
               {formData.locationType === 'online' ? 'Meeting link *' : 'Room, address, or Maps link *'}

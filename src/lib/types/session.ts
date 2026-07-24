@@ -62,6 +62,8 @@ export interface SessionFormData {
   sessionType: SessionType;
   status: SessionStatus;
   occurrences?: number; // how many days/occurrences to create
+  repeatDays?: number[]; // days of week to repeat on (0=Sun..6=Sat)
+  repeatUntil?: string; // ISO date; last date to repeat through
 }
 
 export interface SessionFilter {

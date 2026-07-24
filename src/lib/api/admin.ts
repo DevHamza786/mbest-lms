@@ -580,11 +580,14 @@ export const adminApi = {
     session_type: '1:1' | 'group';
     status?: string;
     student_ids?: number[];
-  }): Promise<AdminSession> {
-    const response = await apiClient.post<{ data: AdminSession }>('/admin/calendar/sessions', data);
+    repeat_days?: number[];
+    repeat_until?: string;
+  }): Promise<AdminSession[]> {
+    const response = await apiClient.post<{ data: AdminSession | AdminSession[] }>('/admin/calendar/sessions', data);
     const respData = (response as any).data;
     if (!respData) throw new Error('Failed to create session');
-    return (typeof respData === 'object' && respData.data !== undefined ? respData.data : respData) as AdminSession;
+    const inner = typeof respData === 'object' && respData.data !== undefined ? respData.data : respData;
+    return Array.isArray(inner) ? inner : [inner];
   },
 
   async getSessions(params?: {
