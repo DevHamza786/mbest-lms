@@ -34,6 +34,7 @@ import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminAttendance from "./pages/admin/AdminAttendance";
 import AdminLessonRequests from "./pages/admin/AdminLessonRequests";
+import AdminMessaging from "./pages/admin/AdminMessaging";
 import AdminCalendar from "./pages/admin/AdminCalendar";
 import AdminPackages from "./pages/admin/AdminPackages";
 import AdminPayments from "./pages/admin/AdminPayments";
@@ -165,6 +166,11 @@ const App = () => (
                     <Route path="lesson-requests" element={
                       <ProtectedRoute allowedRoles={['admin']}>
                         <AdminLessonRequests />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="messaging" element={
+                      <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminMessaging />
                       </ProtectedRoute>
                     } />
                     <Route path="packages" element={

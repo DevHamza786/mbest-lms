@@ -615,6 +615,24 @@ export const adminApi = {
     return Array.isArray(inner) ? inner : [inner];
   },
 
+  async getRecipients(): Promise<Array<{
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    avatar?: string;
+  }>> {
+    const response = await apiClient.get<any>('/admin/users/recipients');
+    const recipients = response.data;
+    if (Array.isArray(recipients)) {
+      return recipients;
+    }
+    if (recipients && Array.isArray(recipients.data)) {
+      return recipients.data;
+    }
+    return [];
+  },
+
   async getLessonRequests(params?: { status?: string; per_page?: number; page?: number }): Promise<any[]> {
     const response = await apiClient.get<any>('/admin/lesson-requests', params);
     if (Array.isArray(response.data)) {
