@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { 
+import { Checkbox } from '@/components/ui/checkbox';
+import {
   Table, 
   TableBody, 
   TableCell, 
@@ -494,6 +495,36 @@ export default function AdminUsers() {
     [users]
   );
 
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const allDisplayedSelected = displayedUsers.length > 0 && selectedUserIds.length === displayedUsers.length;
+
+  const toggleSelectAll = () => {
+    setSelectedUserIds(allDisplayedSelected ? [] : displayedUsers.map((u) => u.id));
+  };
+
+  const toggleSelectUser = (id: number) => {
+    setSelectedUserIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const handleBulkSetActive = async (active: boolean) => {
+    try {
+      await Promise.all(selectedUserIds.map((id) => adminApi.updateUser(id, { is_active: active })));
+      toast({
+        title: "Success",
+        description: `${selectedUserIds.length} user${selectedUserIds.length === 1 ? '' : 's'} ${active ? 'activated' : 'deactivated'}.`,
+      });
+      setSelectedUserIds([]);
+      fetchUsers();
+      refreshStats();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || 'Bulk update failed',
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading && users.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -750,6 +781,14 @@ export default function AdminUsers() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {selectedUserIds.length > 0 && (
+                <div className="flex items-center gap-3 mb-4 p-3 rounded-lg border bg-muted/40">
+                  <span className="text-sm font-medium">{selectedUserIds.length} selected</span>
+                  <Button size="sm" variant="outline" onClick={() => handleBulkSetActive(true)}>Activate</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleBulkSetActive(false)}>Deactivate</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedUserIds([])}>Clear</Button>
+                </div>
+              )}
               {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -762,6 +801,9 @@ export default function AdminUsers() {
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-card shadow-sm [&_tr]:bg-card">
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox checked={allDisplayedSelected} onCheckedChange={toggleSelectAll} aria-label="Select all users" />
+                      </TableHead>
                       <TableHead>User</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Email</TableHead>
@@ -775,6 +817,13 @@ export default function AdminUsers() {
                   <TableBody>
                     {displayedUsers.map((user) => (
                       <TableRow key={user.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedUserIds.includes(user.id)}
+                            onCheckedChange={() => toggleSelectUser(user.id)}
+                            aria-label={`Select ${user.name}`}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
