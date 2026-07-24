@@ -60,9 +60,9 @@ export default function AdminUsers() {
   const [roleFilter, setRoleFilter] = useState<AdminListRoleFilter>('tutor');
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [appliedAccountStatus, setAppliedAccountStatus] = useState<'all' | 'active' | 'inactive'>('all');
-  const [appliedDepartment, setAppliedDepartment] = useState('');
+  const [appliedSpecialization, setAppliedSpecialization] = useState('');
   const [draftAccountStatus, setDraftAccountStatus] = useState<'all' | 'active' | 'inactive'>('all');
-  const [draftDepartment, setDraftDepartment] = useState('');
+  const [draftSpecialization, setDraftSpecialization] = useState('');
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
@@ -138,9 +138,9 @@ export default function AdminUsers() {
         params.is_active = appliedAccountStatus === 'active';
       }
 
-      const dept = appliedDepartment.trim();
-      if (dept) {
-        params.department = dept;
+      const specialization = appliedSpecialization.trim();
+      if (specialization) {
+        params.specialization = specialization;
       }
 
       const result = await adminApi.getUsers(params);
@@ -198,7 +198,7 @@ export default function AdminUsers() {
   useEffect(() => {
     fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roleFilter, appliedSearch, appliedAccountStatus, appliedDepartment, currentPage]);
+  }, [roleFilter, appliedSearch, appliedAccountStatus, appliedSpecialization, currentPage]);
 
   // Refresh stats after user operations
   const refreshStats = () => {
@@ -715,7 +715,7 @@ export default function AdminUsers() {
               setMoreFiltersOpen(open);
               if (open) {
                 setDraftAccountStatus(appliedAccountStatus);
-                setDraftDepartment(appliedDepartment);
+                setDraftSpecialization(appliedSpecialization);
               }
             }}
           >
@@ -723,9 +723,9 @@ export default function AdminUsers() {
               <Button type="button" variant="outline" className="relative">
                 <Filter className="mr-2 h-4 w-4" />
                 More Filters
-                {(appliedAccountStatus !== 'all' || appliedDepartment.trim() !== '') && (
+                {(appliedAccountStatus !== 'all' || appliedSpecialization.trim() !== '') && (
                   <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] text-primary-foreground">
-                    {(appliedAccountStatus !== 'all' ? 1 : 0) + (appliedDepartment.trim() ? 1 : 0)}
+                    {(appliedAccountStatus !== 'all' ? 1 : 0) + (appliedSpecialization.trim() ? 1 : 0)}
                   </span>
                 )}
               </Button>
@@ -749,17 +749,17 @@ export default function AdminUsers() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="filter-department">Department (tutors)</Label>
+                  <Label htmlFor="filter-department">Subjects Taught (tutors)</Label>
                   <Input
                     id="filter-department"
                     name="admin-user-filter-department"
                     autoComplete="off"
-                    placeholder="e.g. Science"
-                    value={draftDepartment}
-                    onChange={(e) => setDraftDepartment(e.target.value)}
+                    placeholder="e.g. Mathematics"
+                    value={draftSpecialization}
+                    onChange={(e) => setDraftSpecialization(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Narrows to tutor profiles whose department contains this text.
+                    Narrows to tutor profiles whose subjects taught contain this text.
                   </p>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
@@ -769,9 +769,9 @@ export default function AdminUsers() {
                     size="sm"
                     onClick={() => {
                       setDraftAccountStatus('all');
-                      setDraftDepartment('');
+                      setDraftSpecialization('');
                       setAppliedAccountStatus('all');
-                      setAppliedDepartment('');
+                      setAppliedSpecialization('');
                       setCurrentPage(1);
                       setMoreFiltersOpen(false);
                     }}
@@ -783,7 +783,7 @@ export default function AdminUsers() {
                     size="sm"
                     onClick={() => {
                       setAppliedAccountStatus(draftAccountStatus);
-                      setAppliedDepartment(draftDepartment.trim());
+                      setAppliedSpecialization(draftSpecialization.trim());
                       setCurrentPage(1);
                       setMoreFiltersOpen(false);
                     }}
