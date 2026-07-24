@@ -40,6 +40,8 @@ import { useToast } from '@/hooks/use-toast';
 import { adminApi, AdminClass, AdminUser, AdminSession } from '@/lib/api/admin';
 import { Checkbox } from '@/components/ui/checkbox';
 
+const SUBJECT_OPTIONS = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Computer Science'];
+
 /** Map DB class status to create/edit form values (draft | active | archived). */
 function dbClassStatusToForm(status: string): 'draft' | 'active' | 'archived' {
   if (status === 'inactive') return 'draft';
@@ -93,6 +95,7 @@ export default function AdminClasses() {
     description: '',
     category: '',
     level: 'Beginner',
+    year_level: '',
     capacity: '',
     credits: '',
     duration: '',
@@ -287,6 +290,7 @@ export default function AdminClasses() {
         description: classForm.description || undefined,
         category: classForm.category || undefined,
         level: classForm.level as 'Beginner' | 'Intermediate' | 'Advanced',
+        year_level: classForm.year_level || undefined,
         capacity: classForm.capacity ? parseInt(classForm.capacity) : undefined,
         credits: classForm.credits ? parseInt(classForm.credits) : undefined,
         duration: classForm.duration || undefined,
@@ -308,6 +312,7 @@ export default function AdminClasses() {
         description: '',
         category: '',
         level: 'Beginner',
+        year_level: '',
         capacity: '',
         credits: '',
         duration: '',
@@ -451,6 +456,7 @@ export default function AdminClasses() {
       description: cls.description || '',
       category: cls.category || '',
       level: cls.level || 'Beginner',
+      year_level: cls.year_level || '',
       capacity: cls.capacity?.toString() || '',
       credits: cls.credits?.toString() || '',
       duration: cls.duration || '',
@@ -483,6 +489,7 @@ export default function AdminClasses() {
         description: classForm.description || undefined,
         category: classForm.category || undefined,
         level: classForm.level as 'Beginner' | 'Intermediate' | 'Advanced',
+        year_level: classForm.year_level || undefined,
         capacity: classForm.capacity ? parseInt(classForm.capacity) : undefined,
         credits: classForm.credits ? parseInt(classForm.credits) : undefined,
         duration: classForm.duration || undefined,
@@ -583,18 +590,34 @@ export default function AdminClasses() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="classCategory">Category</Label>
-                  <Input 
-                    id="classCategory" 
-                    placeholder="e.g., Computer Science"
+                  <Label htmlFor="classCategory">Subject</Label>
+                  <Select
                     value={classForm.category}
-                    onChange={(e) => setClassForm({ ...classForm, category: e.target.value })}
+                    onValueChange={(value) => setClassForm({ ...classForm, category: value })}
+                  >
+                    <SelectTrigger id="classCategory" className="w-full">
+                      <SelectValue placeholder="Select subject" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUBJECT_OPTIONS.map((subject) => (
+                        <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="classYearLevel">Year Level</Label>
+                  <Input
+                    id="classYearLevel"
+                    placeholder="e.g., Year 7"
+                    value={classForm.year_level}
+                    onChange={(e) => setClassForm({ ...classForm, year_level: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="classLevel">Level *</Label>
-                  <Select 
-                    value={classForm.level} 
+                  <Select
+                    value={classForm.level}
                     onValueChange={(value) => setClassForm({ ...classForm, level: value })}
                   >
                     <SelectTrigger className="w-full">
@@ -1673,12 +1696,28 @@ export default function AdminClasses() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="editClassCategory">Category</Label>
-                <Input 
-                  id="editClassCategory" 
-                  placeholder="e.g., Computer Science"
+                <Label htmlFor="editClassCategory">Subject</Label>
+                <Select
                   value={classForm.category}
-                  onChange={(e) => setClassForm({ ...classForm, category: e.target.value })}
+                  onValueChange={(value) => setClassForm({ ...classForm, category: value })}
+                >
+                  <SelectTrigger id="editClassCategory">
+                    <SelectValue placeholder="Select subject" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUBJECT_OPTIONS.map((subject) => (
+                      <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editClassYearLevel">Year Level</Label>
+                <Input
+                  id="editClassYearLevel"
+                  placeholder="e.g., Year 7"
+                  value={classForm.year_level}
+                  onChange={(e) => setClassForm({ ...classForm, year_level: e.target.value })}
                 />
               </div>
               <div className="space-y-2">

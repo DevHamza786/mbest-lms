@@ -60,6 +60,7 @@ export interface AdminClass {
   description?: string;
   category?: string;
   level?: string;
+  year_level?: string;
   capacity?: number;
   enrolled?: number;
   credits?: number;
@@ -376,6 +377,7 @@ export const adminApi = {
     description?: string;
     category: string;
     level: string;
+    year_level?: string;
     capacity: number;
     credits: number;
     duration: string;
