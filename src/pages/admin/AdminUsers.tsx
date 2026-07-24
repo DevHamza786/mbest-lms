@@ -76,6 +76,7 @@ export default function AdminUsers() {
     email: '',
     role: '',
     password: '',
+    phone: '',
   });
   const [editUserForm, setEditUserForm] = useState({
     name: '',
@@ -246,11 +247,22 @@ export default function AdminUsers() {
         return;
       }
 
+      const phoneDigits = addUserForm.phone.trim();
+      if (phoneDigits && !/^\+61\d{9}$/.test(phoneDigits.replace(/[\s-]/g, ''))) {
+        toast({
+          title: "Validation Error",
+          description: "Phone must be a valid Australian number in the format +61XXXXXXXXX.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       await adminApi.createUser({
         name: `${addUserForm.firstName} ${addUserForm.lastName}`,
         email: addUserForm.email,
         password: addUserForm.password,
         role: addUserForm.role,
+        phone: phoneDigits ? phoneDigits.replace(/[\s-]/g, '') : undefined,
       });
 
       toast({
@@ -265,6 +277,7 @@ export default function AdminUsers() {
         email: '',
         role: '',
         password: '',
+        phone: '',
       });
       fetchUsers();
       refreshStats();
@@ -589,9 +602,19 @@ export default function AdminUsers() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="add-phone">Phone (optional)</Label>
+                <Input
+                  id="add-phone"
+                  type="tel"
+                  placeholder="+61XXXXXXXXX"
+                  value={addUserForm.phone}
+                  onChange={(e) => setAddUserForm({ ...addUserForm, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Role *</Label>
-                <Select 
-                  value={addUserForm.role} 
+                <Select
+                  value={addUserForm.role}
                   onValueChange={(value) => setAddUserForm({ ...addUserForm, role: value })}
                 >
                   <SelectTrigger>
