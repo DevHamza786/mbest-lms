@@ -496,6 +496,7 @@ export default function AdminClasses() {
         tutor_id: tutorUser.tutor.id,
         start_date: classForm.start_date || undefined,
         end_date: classForm.end_date || undefined,
+        status: classForm.status || undefined,
       });
 
       toast({
@@ -1760,13 +1761,29 @@ export default function AdminClasses() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="editClassDuration">Duration</Label>
-                <Input 
-                  id="editClassDuration" 
+                <Input
+                  id="editClassDuration"
                   placeholder="e.g., 12 weeks"
                   value={classForm.duration}
                   onChange={(e) => setClassForm({ ...classForm, duration: e.target.value })}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editClassStatus">Status</Label>
+              <Select
+                value={classForm.status || 'active'}
+                onValueChange={(value) => setClassForm({ ...classForm, status: value })}
+              >
+                <SelectTrigger id="editClassStatus" className="w-full">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="editClassTutor">Tutor *</Label>
