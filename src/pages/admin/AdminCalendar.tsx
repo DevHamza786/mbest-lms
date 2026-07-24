@@ -588,7 +588,13 @@ export default function AdminCalendar() {
                         </div>
                       ))}
                       {daySessions.length > 3 && (
-                        <p className="text-[10px] text-muted-foreground text-center">
+                        <p
+                          className="text-[10px] text-muted-foreground text-center cursor-pointer hover:underline"
+                          onClick={() => {
+                            setSelectedDate(day);
+                            setViewMode('day');
+                          }}
+                        >
                           +{daySessions.length - 3} more
                         </p>
                       )}
@@ -661,7 +667,14 @@ export default function AdminCalendar() {
                         </div>
                       ))}
                       {daySessions.length > 2 && (
-                        <div className="text-[10px] text-muted-foreground">
+                        <div
+                          className="text-[10px] text-muted-foreground hover:underline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDate(day);
+                            setViewMode('day');
+                          }}
+                        >
                           +{daySessions.length - 2} more
                         </div>
                       )}
