@@ -47,6 +47,15 @@ export function SignUpForm() {
             title: 'Account Created!',
             description: `Welcome, ${session.name}! Complete subscription setup if prompted.`,
           });
+        } else if (session.role === 'tutor') {
+          // Send new tutors straight to their profile so they fill in
+          // specialization/rate/availability details right away, instead of
+          // landing on the dashboard with an incomplete profile.
+          navigate('/tutor/profile', { replace: true });
+          toast({
+            title: 'Welcome to MBEST!',
+            description: `Account created successfully. Please complete your tutor profile to get started.`,
+          });
         } else {
           navigate(getPortalRoot(session.role), { replace: true });
           toast({
