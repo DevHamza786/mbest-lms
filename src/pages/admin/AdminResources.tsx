@@ -244,6 +244,8 @@ export default function AdminResources() {
         title: formData.title,
         description: formData.description,
         category: formData.category || undefined,
+        tags: formData.tags || undefined,
+        is_public: formData.is_public,
       });
 
       toast({
@@ -821,12 +823,31 @@ export default function AdminResources() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-category">Category</Label>
-              <Input 
+              <Input
                 id="edit-category"
                 placeholder="Enter category"
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-tags">Tags</Label>
+              <Input
+                id="edit-tags"
+                placeholder="Enter tags separated by commas"
+                value={formData.tags}
+                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="edit-is_public"
+                checked={formData.is_public}
+                onChange={(e) => setFormData({ ...formData, is_public: e.target.checked })}
+                className="rounded"
+              />
+              <Label htmlFor="edit-is_public" className="cursor-pointer">Make this resource public</Label>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setEditDialogOpen(false); resetForm(); }}>
