@@ -9,12 +9,14 @@ import { JoinClassModal } from '@/components/modals/JoinClassModal';
 import { QuickActionsModal } from '@/components/modals/QuickActionsModal';
 import { useNavigate } from 'react-router-dom';
 import { studentApi } from '@/lib/api';
+import { useSession } from '@/lib/store/authStore';
 import { useToast } from '@/hooks/use-toast';
 import { sessionIsOnline } from '@/lib/sessionLocation';
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const currentUser = useSession();
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState({
     enrolled_classes: 0,
@@ -152,7 +154,7 @@ export default function StudentDashboard() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">My Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back, Emma! Here's your learning progress overview.
+            Welcome back{currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}! Here's your learning progress overview.
           </p>
         </div>
         <div className="flex gap-2">
