@@ -590,6 +590,17 @@ export const adminApi = {
     return Array.isArray(inner) ? inner : [inner];
   },
 
+  async getLessonRequests(params?: { status?: string; per_page?: number; page?: number }): Promise<any[]> {
+    const response = await apiClient.get<any>('/admin/lesson-requests', params);
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    if (response.data && 'data' in response.data && Array.isArray(response.data.data)) {
+      return response.data.data;
+    }
+    return [];
+  },
+
   async getSessions(params?: {
     date_from?: string;
     date_to?: string;

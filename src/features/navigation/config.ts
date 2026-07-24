@@ -81,11 +81,17 @@ export const navByRole: Record<UserRole, NavSection[]> = {
           label: 'Resources',
           description: 'Educational materials and content'
         },
-        { 
-          href: '/admin/attendance', 
-          icon: ClipboardCheck, 
+        {
+          href: '/admin/attendance',
+          icon: ClipboardCheck,
           label: 'Attendance',
           description: 'Attendance records and timesheets'
+        },
+        {
+          href: '/admin/lesson-requests',
+          icon: ClipboardList,
+          label: 'Lesson Requests',
+          description: 'Monitor parent lesson requests to tutors'
         },
       ]
     },
