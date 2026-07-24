@@ -56,6 +56,26 @@ export default function AdminBilling() {
     new_students_this_month: 0,
   });
 
+  // Per-package breakdown (from GET /admin/billing/package-stats)
+  const [packageStats, setPackageStats] = useState<{
+    packages: Array<{ id: number; name: string; price: string | number; active_students: number; revenue: number }>;
+    total_revenue_from_packages: number;
+    total_active_students: number;
+  }>({ packages: [], total_revenue_from_packages: 0, total_active_students: 0 });
+  const [packageStatsLoading, setPackageStatsLoading] = useState(true);
+
+  const fetchPackageStats = useCallback(async () => {
+    try {
+      setPackageStatsLoading(true);
+      const data = await adminApi.getPackageStats();
+      setPackageStats(data);
+    } catch (error: unknown) {
+      console.error('Error fetching package stats:', error);
+    } finally {
+      setPackageStatsLoading(false);
+    }
+  }, []);
+
   const fetchInvoices = useCallback(async () => {
     try {
       setLoading(true);
@@ -134,6 +154,7 @@ export default function AdminBilling() {
 
   useEffect(() => {
     fetchBillingSummary();
+    fetchPackageStats();
   }, []);
 
   useEffect(() => {
@@ -390,6 +411,49 @@ export default function AdminBilling() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Revenue by Package</CardTitle>
+          <CardDescription>Active packages, enrolled students, and revenue collected per package</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {packageStatsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : packageStats.packages.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No active packages found.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Package</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Active Students</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {packageStats.packages.map((pkg) => (
+                  <TableRow key={pkg.id}>
+                    <TableCell className="font-medium">{pkg.name}</TableCell>
+                    <TableCell>${Number(pkg.price).toFixed(2)}</TableCell>
+                    <TableCell>{pkg.active_students}</TableCell>
+                    <TableCell className="text-right">${pkg.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {!packageStatsLoading && packageStats.packages.length > 0 && (
+            <div className="flex justify-end gap-8 mt-4 pt-4 border-t text-sm">
+              <span className="text-muted-foreground">Total active students: <span className="font-semibold text-foreground">{packageStats.total_active_students}</span></span>
+              <span className="text-muted-foreground">Total package revenue: <span className="font-semibold text-foreground">${packageStats.total_revenue_from_packages.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="space-y-6">
           {/* Invoice Filters */}
