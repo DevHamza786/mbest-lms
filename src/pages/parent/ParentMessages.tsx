@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -88,6 +89,7 @@ interface OptimisticMessage extends Omit<Message, 'id' | 'created_at'> {
 }
 
 export default function ParentMessages() {
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [threads, setThreads] = useState<ThreadData[]>([]);
@@ -106,7 +108,22 @@ export default function ParentMessages() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const channelRef = useRef<any>(null);
   const { toast } = useToast();
-  
+
+  // If navigated here with a specific tutor to contact (e.g. "Message Tutor"
+  // from a class card), open the compose dialog pre-filled with them, even
+  // if no thread with them exists yet.
+  useEffect(() => {
+    const contactTutor = (location.state as { contactTutor?: { id: number; name: string; email: string } } | null)?.contactTutor;
+    if (!contactTutor || initialLoading) return;
+    setRecipients((prev) => (
+      prev.some((r) => r.id === contactTutor.id)
+        ? prev
+        : [...prev, { id: contactTutor.id, name: contactTutor.name, email: contactTutor.email, role: 'tutor' }]
+    ));
+    setNewMessageRecipient(String(contactTutor.id));
+    setNewMessageOpen(true);
+  }, [location.state, initialLoading]);
+
   // Initialize chat
   useEffect(() => {
     initializeChat();

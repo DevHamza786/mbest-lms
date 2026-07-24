@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import '@/styles/parent-portal.css';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +20,8 @@ import {
   Search, 
   AlertCircle,
   Eye,
-  GraduationCap
+  GraduationCap,
+  MessageSquare
 } from 'lucide-react';
 import { ChildSwitcher } from '@/components/parent/ChildSwitcher';
 import { useParentContext, useParentStore } from '@/lib/store/parentStore';
@@ -28,6 +30,7 @@ import { ClassDetailsModal } from '@/components/modals/ClassDetailsModal';
 import type { ParentClass } from '@/lib/store/parentStore';
 
 export default function ParentClasses() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedClass, setSelectedClass] = useState<ParentClass | null>(null);
@@ -78,6 +81,8 @@ export default function ParentClasses() {
             id: String(cls.id),
             name: cls.name,
             tutor: cls.tutor.user.name,
+            tutorId: cls.tutor.user.id,
+            tutorEmail: cls.tutor.user.email,
             schedule: scheduleString || 'No schedule',
             scheduleCount: cls.schedules?.length || 0,
             scheduleData: cls.schedules, // Keep original for detailed view
@@ -332,15 +337,25 @@ export default function ParentClasses() {
                   </div>
 
                   <div className="pt-4 space-y-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="parent-button w-full group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all duration-300"
                       onClick={() => handleViewClass(classItem)}
                     >
                       <Eye className="icon-hover mr-2 h-4 w-4" />
                       View Class Details
                     </Button>
-                    
+                    <Button
+                      variant="outline"
+                      className="parent-button w-full"
+                      onClick={() => navigate('/parent/messages', {
+                        state: { contactTutor: { id: classItem.tutorId, name: classItem.tutor, email: classItem.tutorEmail } }
+                      })}
+                    >
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Message Tutor
+                    </Button>
+
                     <div className="text-xs text-muted-foreground text-center group-hover:text-foreground/60 transition-colors duration-300">
                       <span className="inline-flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" />
