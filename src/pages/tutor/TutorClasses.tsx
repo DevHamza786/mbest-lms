@@ -92,6 +92,7 @@ export default function TutorClasses() {
     class_id: null as number | null,
     repeat_days: [] as number[],
     repeat_until: '',
+    location_detail: '',
   });
 
   const [editSession, setEditSession] = useState({
@@ -299,6 +300,7 @@ export default function TutorClasses() {
         subject: newSession.subject,
         year_level: newSession.year_level || undefined,
         location: newSession.location,
+        location_detail: newSession.location_detail || undefined,
         session_type: newSession.session_type,
         student_ids: newSession.student_ids,
         class_id: newSession.class_id || undefined,
@@ -324,6 +326,7 @@ export default function TutorClasses() {
         class_id: null,
         repeat_days: [],
         repeat_until: '',
+        location_detail: '',
       });
       setStudents([]);
       setSelectedClassId('');
@@ -614,6 +617,7 @@ export default function TutorClasses() {
               class_id: null,
               repeat_days: [],
               repeat_until: '',
+              location_detail: '',
             });
             setStudents([]);
             setSelectedClassId('');
@@ -692,6 +696,15 @@ export default function TutorClasses() {
                       <SelectItem value="home">Home</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="location_detail">Meeting Link / Room / Address (optional)</Label>
+                  <Input
+                    id="location_detail"
+                    value={newSession.location_detail}
+                    onChange={(e) => setNewSession(prev => ({ ...prev, location_detail: e.target.value }))}
+                    placeholder="e.g., https://meet.google.com/... or Room 4B"
+                  />
                 </div>
               </div>
 

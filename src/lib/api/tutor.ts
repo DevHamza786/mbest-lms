@@ -314,6 +314,7 @@ export const tutorApi = {
     subject: string;
     year_level?: string;
     location: string;
+    location_detail?: string;
     session_type: string;
     student_ids: number[];
     class_id?: number;
@@ -331,6 +332,7 @@ export const tutorApi = {
       formData.append('subject', data.subject);
       if (data.year_level) formData.append('year_level', data.year_level);
       formData.append('location', data.location);
+      if (data.location_detail) formData.append('location_detail', data.location_detail);
       formData.append('session_type', data.session_type);
       data.student_ids.forEach((id) => formData.append('student_ids[]', String(id)));
       if (data.class_id !== undefined) formData.append('class_id', String(data.class_id));
