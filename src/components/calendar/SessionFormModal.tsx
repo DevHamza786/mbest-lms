@@ -53,6 +53,7 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [studentSearch, setStudentSearch] = useState('');
 
   // Initialize form with session data if editing
   useEffect(() => {
@@ -270,8 +271,14 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
           {/* Students */}
           <div>
             <Label>Students * (Select one or more)</Label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {students.map(student => (
+            <Input
+              placeholder="Search students by name..."
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+              className="mt-2 mb-2"
+            />
+            <div className="flex flex-wrap gap-2">
+              {students.filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase())).map(student => (
                 <Badge
                   key={student.id}
                   variant={selectedStudents.includes(student.id) ? 'default' : 'outline'}
