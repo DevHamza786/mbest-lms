@@ -90,6 +90,8 @@ export default function TutorClasses() {
     year_level: '',
     student_ids: [] as number[],
     class_id: null as number | null,
+    repeat_days: [] as number[],
+    repeat_until: '',
   });
 
   const [editSession, setEditSession] = useState({
@@ -300,6 +302,8 @@ export default function TutorClasses() {
         session_type: newSession.session_type,
         student_ids: newSession.student_ids,
         class_id: newSession.class_id || undefined,
+        repeat_days: newSession.repeat_days.length ? newSession.repeat_days : undefined,
+        repeat_until: newSession.repeat_days.length ? newSession.repeat_until : undefined,
       });
 
       // Refresh sessions
@@ -318,6 +322,8 @@ export default function TutorClasses() {
         year_level: '',
         student_ids: [],
         class_id: null,
+        repeat_days: [],
+        repeat_until: '',
       });
       setStudents([]);
       setSelectedClassId('');
@@ -606,6 +612,8 @@ export default function TutorClasses() {
               year_level: '',
               student_ids: [],
               class_id: null,
+              repeat_days: [],
+              repeat_until: '',
             });
             setStudents([]);
             setSelectedClassId('');
@@ -709,6 +717,42 @@ export default function TutorClasses() {
                     placeholder="e.g., Year 10"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Repeat weekly on (optional)</Label>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, dayIndex) => {
+                    const checked = newSession.repeat_days.includes(dayIndex);
+                    return (
+                      <label key={dayIndex} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const repeat_days = e.target.checked
+                              ? [...newSession.repeat_days, dayIndex]
+                              : newSession.repeat_days.filter((d) => d !== dayIndex);
+                            setNewSession(prev => ({ ...prev, repeat_days }));
+                          }}
+                        />
+                        {label}
+                      </label>
+                    );
+                  })}
+                </div>
+                {newSession.repeat_days.length > 0 && (
+                  <div className="mt-2 max-w-[220px]">
+                    <Label htmlFor="repeat_until" className="text-xs text-muted-foreground">Repeat until</Label>
+                    <Input
+                      id="repeat_until"
+                      type="date"
+                      value={newSession.repeat_until}
+                      min={newSession.date}
+                      onChange={(e) => setNewSession(prev => ({ ...prev, repeat_until: e.target.value }))}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">

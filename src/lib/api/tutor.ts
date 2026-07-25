@@ -319,7 +319,9 @@ export const tutorApi = {
     class_id?: number;
     color?: string;
     materials?: File[];
-  }): Promise<TutoringSession> {
+    repeat_days?: number[];
+    repeat_until?: string;
+  }): Promise<TutoringSession[]> {
     // If materials are provided, send multipart/form-data
     if (data.materials && data.materials.length > 0) {
       const formData = new FormData();
@@ -333,24 +335,28 @@ export const tutorApi = {
       data.student_ids.forEach((id) => formData.append('student_ids[]', String(id)));
       if (data.class_id !== undefined) formData.append('class_id', String(data.class_id));
       if (data.color) formData.append('color', data.color);
+      (data.repeat_days || []).forEach((d) => formData.append('repeat_days[]', String(d)));
+      if (data.repeat_until) formData.append('repeat_until', data.repeat_until);
 
       data.materials.forEach((file) => {
         formData.append('materials[]', file);
       });
 
-      const response = await apiClient.post<{ data: TutoringSession }>(
+      const response = await apiClient.post<{ data: TutoringSession | TutoringSession[] }>(
         '/tutor/sessions',
         formData,
         true,
         true
       );
       if (!response.data) throw new Error('Failed to create session');
-      return response.data.data;
+      const inner = response.data.data;
+      return Array.isArray(inner) ? inner : [inner];
     }
 
-    const response = await apiClient.post<{ data: TutoringSession }>('/tutor/sessions', data);
+    const response = await apiClient.post<{ data: TutoringSession | TutoringSession[] }>('/tutor/sessions', data);
     if (!response.data) throw new Error('Failed to create session');
-    return response.data.data;
+    const inner = response.data.data;
+    return Array.isArray(inner) ? inner : [inner];
   },
 
   async updateSession(id: number, data: Partial<TutoringSession>): Promise<TutoringSession> {
