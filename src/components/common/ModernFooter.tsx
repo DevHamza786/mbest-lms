@@ -23,6 +23,9 @@ export function ModernFooter() {
     { name: 'Services', href: '/services' },
     { name: 'Resources', href: '/resources' },
     { name: 'FAQ', href: '/faq' },
+    { name: 'Help & Support', href: '/support' },
+    { name: 'Privacy Policy', href: '/privacy' },
+    { name: 'Terms & Conditions', href: '/terms' },
     { name: 'Contact', href: '/contact' },
     { name: 'Book Trial', href: '/appointments' }
   ];

@@ -366,7 +366,26 @@ export const commonApi = {
     async update(id: number, data: {
       status: 'pending' | 'approved' | 'rejected' | 'fulfilled';
       review_notes?: string;
+      file?: File;
     }): Promise<ResourceRequest> {
+      if (data.file) {
+        // PHP doesn't populate uploaded files on native PUT requests, so use
+        // Laravel's standard POST + _method=PUT form spoofing when a file is attached.
+        const formData = new FormData();
+        formData.append('_method', 'PUT');
+        formData.append('status', data.status);
+        if (data.review_notes) formData.append('review_notes', data.review_notes);
+        formData.append('file', data.file);
+        const response = await apiClient.post<{ data: ResourceRequest }>(
+          `/resource-requests/${id}`,
+          formData,
+          true,
+          true
+        );
+        if (!response.data) throw new Error('Failed to update resource request');
+        return response.data.data;
+      }
+
       const response = await apiClient.put<{ data: ResourceRequest }>(`/resource-requests/${id}`, data);
       if (!response.data) throw new Error('Failed to update resource request');
       return response.data.data;

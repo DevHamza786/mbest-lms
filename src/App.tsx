@@ -18,6 +18,10 @@ import Services from "./pages/public/Services";
 import Appointments from "./pages/public/Appointments";
 import Resources from "./pages/public/Resources";
 import Contact from "./pages/public/Contact";
+import PrivacyPolicy from "./pages/public/PrivacyPolicy";
+import TermsConditions from "./pages/public/TermsConditions";
+import HelpSupport from "./pages/public/HelpSupport";
+import FAQ from "./pages/public/FAQ";
 import Index from "./pages/Index";
 
 // Auth pages
@@ -106,6 +110,10 @@ const App = () => (
             <Route path="/appointments" element={<Appointments />} />
             <Route path="/resources" element={<Resources />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsConditions />} />
+            <Route path="/support" element={<HelpSupport />} />
+            <Route path="/faq" element={<FAQ />} />
             
             {/* Portal Access - Redirect to Sign Up */}
             <Route path="/portal" element={<Navigate to="/auth/signup" replace />} />

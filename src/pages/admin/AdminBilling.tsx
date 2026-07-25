@@ -278,12 +278,22 @@ export default function AdminBilling() {
     try {
       if (!selectedInvoice) return;
       
-      await adminApi.updateInvoice(selectedInvoice.id, {
-        status: invoiceData.status,
-        paid_date: invoiceData.paidDate || null,
-        payment_method: invoiceData.paymentMethod || null,
-        transaction_id: invoiceData.transactionId || null,
-      });
+      if (invoiceData.receiptFileObject) {
+        const formData = new FormData();
+        formData.append('status', invoiceData.status);
+        if (invoiceData.paidDate) formData.append('paid_date', invoiceData.paidDate);
+        if (invoiceData.paymentMethod) formData.append('payment_method', invoiceData.paymentMethod);
+        if (invoiceData.transactionId) formData.append('transaction_id', invoiceData.transactionId);
+        formData.append('receipt_file', invoiceData.receiptFileObject);
+        await adminApi.updateInvoice(selectedInvoice.id, formData);
+      } else {
+        await adminApi.updateInvoice(selectedInvoice.id, {
+          status: invoiceData.status,
+          paid_date: invoiceData.paidDate || null,
+          payment_method: invoiceData.paymentMethod || null,
+          transaction_id: invoiceData.transactionId || null,
+        });
+      }
       
       toast({
         title: "Success",
@@ -550,6 +560,18 @@ export default function AdminBilling() {
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
+                                {invoice.receipt_url && (
+                                  <a
+                                    href={invoice.receipt_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title="View Receipt Document"
+                                  >
+                                    <Button variant="ghost" size="sm">
+                                      <CreditCard className="h-4 w-4 text-primary" />
+                                    </Button>
+                                  </a>
+                                )}
                                 <Button 
                                   variant="ghost" 
                                   size="sm"

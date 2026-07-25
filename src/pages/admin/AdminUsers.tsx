@@ -869,8 +869,32 @@ export default function AdminUsers() {
                                 {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                               </div>
                             </Badge>
-                            {user.is_incomplete_profile && (
-                              <Badge variant="destructive">Incomplete profile</Badge>
+                            {(user.is_incomplete_profile || (user.role === 'tutor' && user.tutor && !user.tutor.profile_complete)) && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Badge variant="destructive" className="cursor-pointer hover:opacity-90">
+                                    Incomplete profile ℹ️
+                                  </Badge>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-64 p-3 text-xs">
+                                  <p className="font-semibold mb-2 text-foreground">Missing Requirements:</p>
+                                  <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
+                                    {user.tutor?.completion_details ? (
+                                      <>
+                                        {!user.tutor.completion_details.phone && <li>Phone number</li>}
+                                        {!user.tutor.completion_details.address && <li>Address</li>}
+                                        {!user.tutor.completion_details.hourly_rate && <li>Hourly rate</li>}
+                                        {!user.tutor.completion_details.specialization && <li>Specialization subject</li>}
+                                        {!user.tutor.completion_details.subject_year_mapping && <li>Subject year mapping</li>}
+                                        {!user.tutor.completion_details.wwcc_number && <li>WWCC number</li>}
+                                        {!user.tutor.completion_details.wwcc_expiry_date && <li>Valid WWCC expiry date</li>}
+                                      </>
+                                    ) : (
+                                      <li>Required tutor onboarding details missing</li>
+                                    )}
+                                  </ul>
+                                </PopoverContent>
+                              </Popover>
                             )}
                           </div>
                         </TableCell>

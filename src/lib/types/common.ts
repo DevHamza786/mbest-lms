@@ -89,6 +89,8 @@ export interface Resource {
   createdAt: string;
   downloads: number;
   public: boolean;
+  assignedUsers?: Array<{ id: number; name: string; email: string }>;
+  user_ids?: number[];
 }
 
 export interface Invoice {
@@ -114,6 +116,8 @@ export interface Invoice {
   periodEnd?: string;
   tutorAddress?: string;
   notes?: string;
+  receiptFile?: string | null;
+  receiptUrl?: string | null;
 }
 
 export interface InvoiceItem {

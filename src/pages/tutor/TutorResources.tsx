@@ -31,6 +31,7 @@ export default function TutorResources() {
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<'approved' | 'rejected' | 'fulfilled'>('approved');
   const [reviewNotes, setReviewNotes] = useState('');
+  const [reviewFile, setReviewFile] = useState<File | null>(null);
   
   const [newResource, setNewResource] = useState({
     title: '',
@@ -125,6 +126,7 @@ export default function TutorResources() {
       await commonApi.resourceRequests.update(selectedRequest.id, {
         status: reviewStatus,
         review_notes: reviewNotes || undefined,
+        file: reviewFile || undefined,
       });
 
       toast({
@@ -136,6 +138,7 @@ export default function TutorResources() {
       setSelectedRequest(null);
       setReviewNotes('');
       setReviewStatus('approved');
+      setReviewFile(null);
       await loadResourceRequests();
     } catch (error) {
       console.error('Failed to update resource request:', error);
@@ -494,6 +497,17 @@ export default function TutorResources() {
                   </div>
                 </div>
               )}
+
+              <div className="flex items-center space-x-2 pt-2">
+                <Checkbox
+                  id="is_public"
+                  checked={newResource.is_public}
+                  onCheckedChange={(checked) => setNewResource(prev => ({ ...prev, is_public: !!checked }))}
+                />
+                <Label htmlFor="is_public" className="cursor-pointer text-sm font-medium">
+                  Make resource public to all students/parents
+                </Label>
+              </div>
 
               <div className="flex items-center space-x-2">
                 <input
@@ -894,8 +908,19 @@ export default function TutorResources() {
                 placeholder="Add any notes about this decision..."
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
-                rows={4}
+                rows={3}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="review-file">Attach File to Fulfill Request (Optional)</Label>
+              <Input
+                id="review-file"
+                type="file"
+                onChange={(e) => setReviewFile(e.target.files?.[0] || null)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Upload the requested textbook, PDF, or document to respond to the student.
+              </p>
             </div>
           </div>
           <DialogFooter>

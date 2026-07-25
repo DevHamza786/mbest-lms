@@ -62,6 +62,8 @@ function toDateInputValue(value?: string | null): string {
   return `${y}-${mo}-${day}`;
 }
 
+const YEAR_LEVEL_OPTIONS = ['Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6', 'Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 11', 'Year 12'];
+
 export default function AdminClasses() {
   const { toast } = useToast();
   const [classes, setClasses] = useState<AdminClass[]>([]);
@@ -1561,12 +1563,19 @@ export default function AdminClasses() {
             {!sessionClassContext && (
               <div className="space-y-2">
                 <Label htmlFor="sessionYearLevel">Year Level</Label>
-                <Input 
-                  id="sessionYearLevel" 
-                  placeholder="e.g., Grade 12"
+                <Select
                   value={sessionForm.year_level}
-                  onChange={(e) => setSessionForm({ ...sessionForm, year_level: e.target.value })}
-                />
+                  onValueChange={(value) => setSessionForm({ ...sessionForm, year_level: value })}
+                >
+                  <SelectTrigger id="sessionYearLevel">
+                    <SelectValue placeholder="Select year level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {YEAR_LEVEL_OPTIONS.map((year) => (
+                      <SelectItem key={year} value={year}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
             <div className="space-y-3">
@@ -1714,12 +1723,19 @@ export default function AdminClasses() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="editClassYearLevel">Year Level</Label>
-                <Input
-                  id="editClassYearLevel"
-                  placeholder="e.g., Year 7"
+                <Select
                   value={classForm.year_level}
-                  onChange={(e) => setClassForm({ ...classForm, year_level: e.target.value })}
-                />
+                  onValueChange={(value) => setClassForm({ ...classForm, year_level: value })}
+                >
+                  <SelectTrigger id="editClassYearLevel">
+                    <SelectValue placeholder="Select year level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {YEAR_LEVEL_OPTIONS.map((year) => (
+                      <SelectItem key={year} value={year}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="editClassLevel">Level *</Label>

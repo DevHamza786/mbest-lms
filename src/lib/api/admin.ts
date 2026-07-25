@@ -526,9 +526,11 @@ export const adminApi = {
     paid_date?: string;
     payment_method?: string;
     transaction_id?: string;
-  }): Promise<AdminInvoice> {
-    const response = await apiClient.put<any>(`/admin/billing/invoices/${id}`, data);
-    if (!response.success || !response.data) throw new Error('Failed to update invoice');
+  } | FormData): Promise<AdminInvoice> {
+    const response = data instanceof FormData
+      ? await apiClient.upload<any>(`/admin/billing/invoices/${id}`, data)
+      : await apiClient.put<any>(`/admin/billing/invoices/${id}`, data);
+    if (!response.success || !response.data) throw new Error(response.message || 'Failed to update invoice');
     return response.data;
   },
 

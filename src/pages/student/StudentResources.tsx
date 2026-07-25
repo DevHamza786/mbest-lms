@@ -92,6 +92,15 @@ const FulfilledRequestResources = ({
         <p className="text-sm text-green-700 dark:text-green-300 mb-3">
           Your resource request has been fulfilled. Related resources are shown below.
         </p>
+        {(request.fulfilled_file_url || (request as any).fulfilled_file) && (
+          <div className="mt-2">
+            <a href={request.fulfilled_file_url || (request as any).fulfilled_file} target="_blank" rel="noreferrer" download>
+              <Button size="sm" variant="default">
+                <Download className="mr-2 h-4 w-4" /> Download Response Document
+              </Button>
+            </a>
+          </div>
+        )}
       </div>
 
       {isLoadingRelated ? (

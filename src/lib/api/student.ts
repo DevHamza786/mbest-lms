@@ -125,6 +125,17 @@ export const studentApi = {
     await apiClient.post(`/student/classes/${id}/enroll`);
   },
 
+  async getAvailableClasses(): Promise<StudentClass[]> {
+    const response = await apiClient.get<any>('/student/classes/available');
+    if (response.data && Array.isArray(response.data)) return response.data;
+    if (response.data && 'data' in response.data && Array.isArray(response.data.data)) return response.data.data;
+    return [];
+  },
+
+  async joinClassByCode(classCode: string): Promise<void> {
+    await apiClient.post('/student/classes/join', { class_code: classCode });
+  },
+
   async unenrollFromClass(id: number): Promise<void> {
     await apiClient.post(`/student/classes/${id}/unenroll`);
   },

@@ -434,6 +434,33 @@ export function CreateEditInvoiceModal({ open, onOpenChange, onSave, invoice, mo
             </div>
           </div>
 
+          {(formData.status === 'paid' || mode === 'edit') && (
+            <div>
+              <Label htmlFor="receipt-file">Receipt Document (Optional PDF / Image)</Label>
+              <Input
+                id="receipt-file"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    (formData as any).receiptFileObject = file;
+                  }
+                }}
+              />
+              {formData.receiptUrl && (
+                <a
+                  href={formData.receiptUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary underline mt-1 block"
+                >
+                  View current receipt
+                </a>
+              )}
+            </div>
+          )}
+
           <div>
             <Label htmlFor="description">Description</Label>
             <Textarea

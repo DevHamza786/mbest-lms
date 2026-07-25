@@ -339,18 +339,33 @@ export function SessionFormModal({ open, onOpenChange, session, allSessions, onS
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="sessionType">Session Type *</Label>
-              <Select value={formData.sessionType} onValueChange={(value: SessionType) => setFormData({ ...formData, sessionType: value })}>
-                <SelectTrigger id="sessionType">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1:1">1:1</SelectItem>
-                  <SelectItem value="group">Group</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="sm:col-span-2">
+              <Label htmlFor="locationDetail">
+                {formData.locationType === 'online' ? 'Meeting Link / URL *' : 'Room / Address / Google Maps Link *'}
+              </Label>
+              <Input
+                id="locationDetail"
+                value={formData.locationDetail || ''}
+                onChange={(e) => setFormData({ ...formData, locationDetail: e.target.value })}
+                placeholder={
+                  formData.locationType === 'online'
+                    ? 'https://zoom.us/j/... or https://meet.google.com/...'
+                    : 'Room 2B, 123 Main St, Sydney or Maps URL'
+                }
+              />
             </div>
+          </div>
+          <div>
+            <Label htmlFor="sessionType">Session Type *</Label>
+            <Select value={formData.sessionType} onValueChange={(value: SessionType) => setFormData({ ...formData, sessionType: value })}>
+              <SelectTrigger id="sessionType" className="w-full max-w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1:1">1:1</SelectItem>
+                <SelectItem value="group">Group</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {mode === 'create' && (

@@ -11,6 +11,10 @@ import { StudentClassesCalendar } from '@/components/student/StudentClassesCalen
 import { useToast } from '@/hooks/use-toast';
 import { studentApi } from '@/lib/api';
 
+import { Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+
 const StudentClasses = () => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -23,6 +27,9 @@ const StudentClasses = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [isJoinOpen, setIsJoinOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
   const [attendanceStats, setAttendanceStats] = useState({
     totalSessions: 0,
     present: 0,
@@ -185,8 +192,30 @@ const StudentClasses = () => {
     return "bg-red-500";
   };
 
-  // Calculate stats from enrolled classes and attendance
-  const totalClasses = allClasses.length;
+  const handleJoinByCode = async () => {
+    if (!joinCode.trim()) return;
+    try {
+      setIsJoining(true);
+      await studentApi.joinClassByCode(joinCode.trim());
+      toast({
+        title: "Successfully Joined",
+        description: "You have been enrolled in the class.",
+      });
+      setIsJoinOpen(false);
+      setJoinCode('');
+      // Reload classes
+      const response = await studentApi.getClasses({ per_page: 100 });
+      setAllClasses(response);
+    } catch (error: any) {
+      toast({
+        title: "Error Joining Class",
+        description: error?.message || "Failed to join class. Please check the code.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsJoining(false);
+    }
+  };
 
   return (
     <div className="flex-1 space-y-6 p-6">
@@ -197,6 +226,9 @@ const StudentClasses = () => {
             Enrolled in {totalCount} {totalCount === 1 ? 'course' : 'courses'}
           </p>
         </div>
+        <Button onClick={() => setIsJoinOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Join Class
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -456,6 +488,36 @@ const StudentClasses = () => {
         className={scheduleModal.className}
         classData={scheduleModal.classData}
       />
+
+      <Dialog open={isJoinOpen} onOpenChange={setIsJoinOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Join a New Class</DialogTitle>
+            <DialogDescription>
+              Enter the Class Code or ID provided by your tutor or admin to enroll.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="class-code">Class Code / ID</Label>
+              <Input
+                id="class-code"
+                placeholder="e.g. MATH101 or 12"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsJoinOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleJoinByCode} disabled={isJoining || !joinCode.trim()}>
+              {isJoining ? 'Joining...' : 'Join Class'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
