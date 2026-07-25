@@ -75,6 +75,7 @@ import ParentGrades from "./pages/parent/ParentGrades";
 import ParentResources from "./pages/parent/ParentResources";
 import ParentBilling from "./pages/parent/ParentBilling";
 import ParentMessages from "./pages/parent/ParentMessages";
+import ParentLessonRequests from "./pages/parent/ParentLessonRequests";
 import ParentNotifications from "./pages/parent/ParentNotifications";
 import ParentProfile from "./pages/parent/ParentProfile";
 import ParentAttendance from "./pages/parent/ParentAttendance";
@@ -395,6 +396,11 @@ const App = () => (
                         <Route path="messages" element={
                           <ProtectedRoute allowedRoles={['parent']}>
                             <ParentMessages />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="lesson-requests" element={
+                          <ProtectedRoute allowedRoles={['parent']}>
+                            <ParentLessonRequests />
                           </ProtectedRoute>
                         } />
                         <Route path="notifications" element={

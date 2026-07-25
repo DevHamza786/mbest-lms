@@ -170,6 +170,26 @@ export const parentApi = {
     return response.data?.data || [];
   },
 
+  async getLessonRequests(): Promise<any[]> {
+    const response = await apiClient.get<any>('/parent/lesson-requests');
+    const data = response.data;
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    return [];
+  },
+
+  async createLessonRequest(data: {
+    tutor_user_id: number;
+    student_name: string;
+    subject: string;
+    preferred_date: string;
+    preferred_time: string;
+    duration_hours?: number;
+    message?: string;
+  }): Promise<void> {
+    await apiClient.post('/parent/lesson-requests', data);
+  },
+
   async getChildClass(childId: number, classId: number): Promise<any> {
     const response = await apiClient.get<any>(`/parent/children/${childId}/classes/${classId}`);
     // Laravel returns: { success: true, data: {...} }

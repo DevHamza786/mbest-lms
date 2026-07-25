@@ -386,10 +386,16 @@ export const navByRole: Record<UserRole, NavSection[]> = {
       title: 'Communication',
       items: [
         { 
-          href: '/parent/messages', 
-          icon: MessageSquare, 
+          href: '/parent/messages',
+          icon: MessageSquare,
           label: 'Messages',
           description: 'Communication with tutors'
+        },
+        {
+          href: '/parent/lesson-requests',
+          icon: ClipboardList,
+          label: 'Lesson Requests',
+          description: 'Request extra lessons and track their status'
         },
         { 
           href: '/parent/notifications', 
