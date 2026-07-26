@@ -115,7 +115,7 @@ const StudentMessaging = () => {
       try {
         new Notification(`New Message from ${senderName}`, {
           body: text,
-          icon: '/favicon.ico',
+          icon: '/M.B.E.S.T-logo.png',
         });
       } catch (err) {
         // Notification permission fallback
