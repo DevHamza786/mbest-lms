@@ -33,37 +33,50 @@ export function NotificationCenter() {
   const [isLoading, setIsLoading] = useState(true);
   const { unreadCount, setUnreadCount } = useUnreadNotificationsCount();
 
-  // Load notifications when component mounts or sheet opens
+  // Load notifications immediately on mount & poll every 3 seconds
+  useEffect(() => {
+    loadNotifications(true);
+
+    const pollInterval = setInterval(() => {
+      loadNotifications(false);
+    }, 3000);
+
+    const handleCustomUpdate = () => {
+      loadNotifications(false);
+    };
+
+    window.addEventListener('lms:data_updated', handleCustomUpdate);
+    window.addEventListener('lms:unread_messages_updated', handleCustomUpdate);
+    window.addEventListener('focus', handleCustomUpdate);
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('lms:data_updated', handleCustomUpdate);
+      window.removeEventListener('lms:unread_messages_updated', handleCustomUpdate);
+      window.removeEventListener('focus', handleCustomUpdate);
+    };
+  }, []);
+
+  // Fast update when opening bell icon sheet
   useEffect(() => {
     if (isOpen) {
-      loadNotifications();
+      loadNotifications(false);
     }
   }, [isOpen]);
 
-  // Poll for updates when sheet is open
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const pollInterval = setInterval(() => {
-      loadNotifications();
-    }, 30000); // Poll every 30 seconds
-
-    return () => clearInterval(pollInterval);
-  }, [isOpen]);
-
-  const loadNotifications = async () => {
+  const loadNotifications = async (isInitial: boolean = false) => {
     try {
-      setIsLoading(true);
+      if (isInitial && notifications.length === 0) {
+        setIsLoading(true);
+      }
+
       const apiNotifications = await commonApi.notifications.list({
-        per_page: 50, // Load more notifications
+        per_page: 50,
       });
 
-      // Ensure we have an array
       const notificationsArray = Array.isArray(apiNotifications) ? apiNotifications : [];
 
-      // Map API notifications to component format
       const mappedNotifications: Notification[] = notificationsArray.map((notif: ApiNotification) => {
-        // Determine notification type from API type or title
         let type: 'info' | 'warning' | 'success' | 'urgent' = 'info';
         const typeLower = (notif.type || '').toLowerCase();
         const titleLower = (notif.title || '').toLowerCase();
@@ -86,20 +99,33 @@ export function NotificationCenter() {
         };
       });
 
+      // Check for new notifications to trigger desktop push
+      if (!isInitial && notifications.length > 0 && mappedNotifications.length > notifications.length) {
+        const newNotifs = mappedNotifications.filter(n => !n.read && !notifications.some(old => old.id === n.id));
+        for (const newNotif of newNotifs) {
+          toast({
+            title: `🔔 ${newNotif.title}`,
+            description: newNotif.message,
+          });
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification(newNotif.title, {
+                body: newNotif.message,
+                icon: '/M.B.E.S.T-logo.png',
+              });
+            } catch (e) {}
+          }
+        }
+      }
+
       setNotifications(mappedNotifications);
       
-      // Update unread count from actual notifications
       const actualUnreadCount = mappedNotifications.filter(n => !n.read).length;
       if (setUnreadCount) {
         setUnreadCount(actualUnreadCount);
       }
     } catch (error) {
       console.error('Failed to load notifications:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load notifications. Please try again.',
-        variant: 'destructive',
-      });
     } finally {
       setIsLoading(false);
     }

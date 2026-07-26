@@ -4,7 +4,7 @@ import { useSession } from '@/lib/store/authStore';
 
 /**
  * Hook to get real-time unread notifications count
- * Updates automatically via polling
+ * Updates automatically via fast 3-second polling & custom event triggers
  */
 export function useUnreadNotificationsCount() {
   const [unreadCount, setUnreadCountState] = useState<number>(0);
@@ -34,7 +34,6 @@ export function useUnreadNotificationsCount() {
         setUnreadCountState(count);
         setLoading(false);
       } catch (error) {
-        console.error('Failed to fetch unread notifications count:', error);
         if (mounted) {
           setUnreadCountState(0);
           setLoading(false);
@@ -45,19 +44,29 @@ export function useUnreadNotificationsCount() {
     // Fetch immediately
     fetchUnreadCount();
 
-    // Poll every 30 seconds for updates
+    // Fast poll every 3 seconds for real-time unread badge updates
     const pollInterval = setInterval(() => {
       if (mounted) {
         fetchUnreadCount();
       }
-    }, 30000);
+    }, 3000);
+
+    const handleCustomUpdate = () => {
+      if (mounted) {
+        fetchUnreadCount();
+      }
+    };
+
+    window.addEventListener('lms:data_updated', handleCustomUpdate);
+    window.addEventListener('focus', handleCustomUpdate);
 
     return () => {
       mounted = false;
       clearInterval(pollInterval);
+      window.removeEventListener('lms:data_updated', handleCustomUpdate);
+      window.removeEventListener('focus', handleCustomUpdate);
     };
   }, [session?.id]);
 
   return { unreadCount, loading, setUnreadCount };
 }
-
