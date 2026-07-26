@@ -98,24 +98,30 @@ export default function AdminMessaging() {
 
   const syncBackgroundMessages = async () => {
     try {
-      const response = await commonApi.getThreads();
-      if (response.success && response.data) {
-        setThreads(response.data);
+      const threadsData = await commonApi.messages.getThreads();
+      if (Array.isArray(threadsData)) {
+        setThreads(threadsData);
       }
       if (selectedThread) {
-        const msgResponse = await commonApi.getThreadMessages(selectedThread);
-        if (msgResponse.success && msgResponse.data) {
+        const messages = await commonApi.messages.list({
+          per_page: 100,
+          thread_id: selectedThread,
+        });
+        if (Array.isArray(messages)) {
+          const sorted = messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          const validMessages = sorted.filter(msg => msg && msg.id);
+
           setThreadMessages(prev => {
             const currentMsgs = prev[selectedThread] || [];
-            if (msgResponse.data.length > currentMsgs.length) {
-              const lastMsg = msgResponse.data[msgResponse.data.length - 1];
+            if (validMessages.length > currentMsgs.length) {
+              const lastMsg = validMessages[validMessages.length - 1];
               if (user?.id && lastMsg.sender_id !== user.id && !currentMsgs.some(m => m.id === lastMsg.id)) {
                 triggerNewMessageNotification(lastMsg.sender?.name || 'User', lastMsg.body || 'Sent an attachment');
               }
             }
             return {
               ...prev,
-              [selectedThread]: msgResponse.data,
+              [selectedThread]: validMessages,
             };
           });
         }
