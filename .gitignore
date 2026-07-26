@@ -29,13 +29,11 @@ out/
 .eslintcache
 
 # Environment variables & Local overrides
-.env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
 # Editor & IDE directories
-.vscode/*
 !.vscode/extensions.json
 .idea/
 *.suo
@@ -43,3 +41,4 @@ out/
 *.njsproj
 *.sln
 *.sw?
+config.bat
