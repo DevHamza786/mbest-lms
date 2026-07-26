@@ -156,6 +156,7 @@ const StudentMessaging = () => {
           setThreads(prev => prev.map(t => t.thread_id === threadId ? { ...t, unread_count: 0 } : t));
         }
       }
+      window.dispatchEvent(new Event('lms:unread_messages_updated'));
     } catch (e) {
       // Silent background polling catch
     }

@@ -4,7 +4,7 @@ import { useSession } from '@/lib/store/authStore';
 
 /**
  * Hook to get real-time unread messages count
- * Updates automatically via polling and when component remounts
+ * Updates automatically via fast 3-second polling and window focus/custom events
  */
 export function useUnreadMessagesCount() {
   const [unreadCount, setUnreadCount] = useState<number>(0);
@@ -34,7 +34,6 @@ export function useUnreadMessagesCount() {
         setUnreadCount(totalUnread);
         setLoading(false);
       } catch (error) {
-        console.error('Failed to fetch unread count:', error);
         if (mounted) {
           setUnreadCount(0);
           setLoading(false);
@@ -45,16 +44,28 @@ export function useUnreadMessagesCount() {
     // Fetch immediately
     fetchUnreadCount();
 
-    // Poll every 30 seconds for updates
+    // Fast poll every 3 seconds for real-time sidebar badge updates
     const pollInterval = setInterval(() => {
       if (mounted) {
         fetchUnreadCount();
       }
-    }, 30000);
+    }, 3000);
+
+    // Listen for custom trigger event when messages are read/received
+    const handleCustomUpdate = () => {
+      if (mounted) {
+        fetchUnreadCount();
+      }
+    };
+
+    window.addEventListener('lms:unread_messages_updated', handleCustomUpdate);
+    window.addEventListener('focus', handleCustomUpdate);
 
     return () => {
       mounted = false;
       clearInterval(pollInterval);
+      window.removeEventListener('lms:unread_messages_updated', handleCustomUpdate);
+      window.removeEventListener('focus', handleCustomUpdate);
     };
   }, [session?.id]);
 

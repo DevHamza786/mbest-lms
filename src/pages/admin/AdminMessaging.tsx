@@ -128,6 +128,7 @@ export default function AdminMessaging() {
           setThreads(prev => prev.map(t => t.thread_id === selectedThread ? { ...t, unread_count: 0 } : t));
         }
       }
+      window.dispatchEvent(new Event('lms:unread_messages_updated'));
     } catch (e) {
       // Silent error background catch
     }

@@ -124,8 +124,7 @@ export const navByRole: Record<UserRole, NavSection[]> = {
         { 
           href: '/admin/messaging', 
           icon: MessageSquare, 
-          label: 'Messaging',
-          badge: 5
+          label: 'Messaging'
         },
         { 
           href: '/admin/notifications', 
