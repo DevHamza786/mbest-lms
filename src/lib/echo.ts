@@ -104,15 +104,12 @@ export const initializeEcho = (): Echo<any> => {
       authEndpoint,
     });
     
-    echoInstance = new Echo({
-      broadcaster: 'reverb',
+    const isPusherHost = REVERB_HOST.includes('pusher.com');
+
+    const echoConfig: any = {
+      broadcaster: isPusherHost ? 'pusher' : 'reverb',
       key: REVERB_APP_KEY,
-      wsHost: REVERB_HOST,
-      wsPort: wsPort,
-      wssPort: wsPort,
-      forceTLS: useTLS,
-      enabledTransports: useTLS ? ['wss'] : ['ws'],
-      disableStats: true,
+      forceTLS: true,
       authEndpoint,
       auth: {
         headers: {
@@ -120,7 +117,19 @@ export const initializeEcho = (): Echo<any> => {
           Accept: 'application/json',
         },
       },
-    });
+    };
+
+    if (isPusherHost) {
+      echoConfig.cluster = 'ap2';
+    } else {
+      echoConfig.wsHost = REVERB_HOST;
+      echoConfig.wsPort = wsPort;
+      echoConfig.wssPort = wsPort;
+      echoConfig.enabledTransports = useTLS ? ['wss'] : ['ws'];
+      echoConfig.disableStats = true;
+    }
+
+    echoInstance = new Echo(echoConfig);
   } catch (error) {
     console.error('❌ Failed to initialize Echo:', error);
     throw error;

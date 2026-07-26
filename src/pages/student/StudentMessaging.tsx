@@ -105,10 +105,70 @@ const StudentMessaging = () => {
   const channelRef = useRef<any>(null);
   const { toast } = useToast();
   
+  // Trigger Push & Toast Notifications for incoming messages
+  const triggerNewMessageNotification = (senderName: string, text: string) => {
+    toast({
+      title: `💬 New Message from ${senderName}`,
+      description: text.length > 50 ? text.substring(0, 50) + '...' : text,
+    });
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(`New Message from ${senderName}`, {
+          body: text,
+          icon: '/favicon.ico',
+        });
+      } catch (err) {
+        // Notification permission fallback
+      }
+    }
+  };
+
+  const syncBackgroundMessages = async (activeThreadId?: string | null) => {
+    const threadId = activeThreadId !== undefined ? activeThreadId : selectedThread;
+    try {
+      const response = await commonApi.getThreads();
+      if (response.success && response.data) {
+        setThreads(response.data);
+      }
+      if (threadId) {
+        const msgResponse = await commonApi.getThreadMessages(threadId);
+        if (msgResponse.success && msgResponse.data) {
+          setThreadMessages(prev => {
+            const currentMsgs = prev[threadId] || [];
+            if (msgResponse.data.length > currentMsgs.length) {
+              const lastMsg = msgResponse.data[msgResponse.data.length - 1];
+              if (currentUserId && lastMsg.sender_id !== currentUserId && !currentMsgs.some(m => m.id === lastMsg.id)) {
+                triggerNewMessageNotification(lastMsg.sender?.name || 'User', lastMsg.body || 'Sent an attachment');
+              }
+            }
+            return {
+              ...prev,
+              [threadId]: msgResponse.data,
+            };
+          });
+        }
+      }
+    } catch (e) {
+      // Silent background polling catch
+    }
+  };
+
   // Fetch current user and threads on mount
   useEffect(() => {
     initializeChat();
+
+    // Request browser desktop push notifications
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    // Auto-polling fallback every 4 seconds for WhatsApp-like zero-delay sync
+    const pollInterval = setInterval(() => {
+      syncBackgroundMessages();
+    }, 4000);
+
     return () => {
+      clearInterval(pollInterval);
       // Cleanup: leave channel on unmount
       if (channelRef.current) {
         try {
@@ -119,7 +179,7 @@ const StudentMessaging = () => {
         channelRef.current = null;
       }
     };
-  }, []);
+  }, [selectedThread, currentUserId]);
 
   const initializeChat = async () => {
     try {

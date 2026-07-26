@@ -78,11 +78,68 @@ export default function TutorMessaging() {
     important: false,
   });
 
+  // Trigger Push & Toast Notifications for incoming messages
+  const triggerNewMessageNotification = (senderName: string, text: string) => {
+    toast({
+      title: `💬 New Message from ${senderName}`,
+      description: text.length > 50 ? text.substring(0, 50) + '...' : text,
+    });
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(`New Message from ${senderName}`, {
+          body: text,
+          icon: '/favicon.ico',
+        });
+      } catch (err) {
+        // Fallback catch
+      }
+    }
+  };
+
+  const syncBackgroundMessages = async () => {
+    try {
+      const response = await commonApi.getThreads();
+      if (response.success && response.data) {
+        setThreads(response.data);
+      }
+      if (selectedThread) {
+        const msgResponse = await commonApi.getThreadMessages(selectedThread);
+        if (msgResponse.success && msgResponse.data) {
+          setThreadMessages(prev => {
+            const currentMsgs = prev[selectedThread] || [];
+            if (msgResponse.data.length > currentMsgs.length) {
+              const lastMsg = msgResponse.data[msgResponse.data.length - 1];
+              if (user?.id && lastMsg.sender_id !== user.id && !currentMsgs.some(m => m.id === lastMsg.id)) {
+                triggerNewMessageNotification(lastMsg.sender?.name || 'User', lastMsg.body || 'Sent an attachment');
+              }
+            }
+            return {
+              ...prev,
+              [selectedThread]: msgResponse.data,
+            };
+          });
+        }
+      }
+    } catch (e) {
+      // Silent error background catch
+    }
+  };
+
   // Load threads on mount
   useEffect(() => {
     loadThreads();
     loadRecipients();
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    const pollInterval = setInterval(() => {
+      syncBackgroundMessages();
+    }, 4000);
+
     return () => {
+      clearInterval(pollInterval);
       // Cleanup: leave channel on unmount
       if (channelRef.current) {
         try {
@@ -93,7 +150,7 @@ export default function TutorMessaging() {
         channelRef.current = null;
       }
     };
-  }, []);
+  }, [selectedThread, user?.id]);
 
   // Set up WebSocket listener when thread is selected
   useEffect(() => {
