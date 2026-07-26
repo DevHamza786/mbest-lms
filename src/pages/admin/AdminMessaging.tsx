@@ -124,6 +124,8 @@ export default function AdminMessaging() {
               [selectedThread]: validMessages,
             };
           });
+
+          setThreads(prev => prev.map(t => t.thread_id === selectedThread ? { ...t, unread_count: 0 } : t));
         }
       }
     } catch (e) {
@@ -407,9 +409,7 @@ export default function AdminMessaging() {
                 const isChatOpen = thread.thread_id === selectedThread;
                 
                 // Only increment unread count if message is from another user AND chat is not open
-                const newUnreadCount = isFromCurrentUser 
-                  ? thread.unread_count 
-                  : (isChatOpen ? thread.unread_count : Math.max(0, thread.unread_count + 1));
+                const newUnreadCount = (isFromCurrentUser || isChatOpen) ? 0 : Math.max(0, thread.unread_count + 1);
                 
                 updatedThreads[threadIndex] = {
                   ...thread,
